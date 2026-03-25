@@ -468,8 +468,9 @@ function Divider() {
 
 // ── NAV ──
 function NavBar() {
-  const [hidden, setHidden] = useState(false)
-  const [atTop,  setAtTop]  = useState(true)
+  const [hidden,   setHidden]   = useState(false)
+  const [atTop,    setAtTop]    = useState(true)
+  const [mobileOpen, setMobileOpen] = useState(false)
   const lastY = useRef(0)
   useEffect(() => {
     const fn = () => { const y=window.scrollY; setAtTop(y<20); setHidden(y>lastY.current&&y>80); lastY.current=y }
@@ -478,8 +479,8 @@ function NavBar() {
   }, [])
   const W = { maxWidth:'1120px',margin:'0 auto',padding:'0 32px' }
   return (
-    <nav style={{ position:'fixed',top:'40px',left:0,right:0,zIndex:100,height:'68px',background:atTop?'rgba(7,8,12,0.6)':'rgba(7,8,12,0.95)',backdropFilter:'blur(28px) saturate(180%)',borderBottom:`1px solid ${atTop?'transparent':'rgba(255,255,255,0.055)'}`,transition:'transform 0.4s cubic-bezier(0.4,0,0.2,1),background 0.3s,border-color 0.3s,opacity 0.3s',transform:hidden?'translateY(-110%)':'translateY(0)',opacity:hidden?0:1 }}>
-      <div style={{ ...W,height:'100%',display:'flex',alignItems:'center',justifyContent:'space-between' }}>
+    <nav style={{ position:'fixed',top:'40px',left:0,right:0,zIndex:100,background:atTop?'rgba(7,8,12,0.6)':'rgba(7,8,12,0.95)',backdropFilter:'blur(28px) saturate(180%)',borderBottom:`1px solid ${atTop?'transparent':'rgba(255,255,255,0.055)'}`,transition:'transform 0.4s cubic-bezier(0.4,0,0.2,1),background 0.3s,border-color 0.3s,opacity 0.3s',transform:hidden?'translateY(-110%)':'translateY(0)',opacity:hidden?0:1 }}>
+      <div style={{ ...W,height:'68px',display:'flex',alignItems:'center',justifyContent:'space-between' }}>
         <Link href="/" style={{ display:'flex',alignItems:'center',gap:'10px',textDecoration:'none',fontFamily:'JetBrains Mono, monospace',fontWeight:700,fontSize:'15px',color:'#F0F2F7' }}>
           <div style={{ width:8,height:8,borderRadius:'50%',background:'var(--accent)',boxShadow:'0 0 8px var(--accent)',animation:'pulseAnim 2s ease-in-out infinite' }} />
           GetHiredASAP
@@ -493,13 +494,35 @@ function NavBar() {
           ))}
         </div>
         <div style={{ display:'flex',gap:'10px',alignItems:'center' }}>
-          <Link href="/login" style={{ fontFamily:'DM Sans,sans-serif',fontWeight:500,fontSize:'14px',color:'var(--muted2)',textDecoration:'none',padding:'7px 16px',borderRadius:'8px',transition:'color 0.2s' }}
+          <Link href="/login" className="nl" style={{ fontFamily:'DM Sans,sans-serif',fontWeight:500,fontSize:'14px',color:'var(--muted2)',textDecoration:'none',padding:'7px 16px',borderRadius:'8px',transition:'color 0.2s' }}
           onMouseEnter={e=>e.currentTarget.style.color='var(--text)'}
           onMouseLeave={e=>e.currentTarget.style.color='var(--muted2)'}
           >Sign in</Link>
-          <Btn href="/register" primary>Get started →</Btn>
+          <Link href="/register" className="nl" style={{ fontFamily:'DM Sans,sans-serif',fontWeight:700,fontSize:'14px',color:'var(--bg)',background:'var(--accent)',padding:'9px 22px',borderRadius:'8px',textDecoration:'none',transition:'all 0.2s' }}
+          onMouseEnter={e=>{e.currentTarget.style.background='#00FFAA';e.currentTarget.style.boxShadow='0 0 24px rgba(0,255,136,0.35)'}}
+          onMouseLeave={e=>{e.currentTarget.style.background='var(--accent)';e.currentTarget.style.boxShadow='none'}}
+          >Get started →</Link>
+          {/* Hamburger */}
+          <button onClick={()=>setMobileOpen(!mobileOpen)} style={{ display:'none',flexDirection:'column',gap:'5px',background:'transparent',border:'none',cursor:'pointer',padding:'6px' }} className="mob-ham">
+            <span style={{ width:'22px',height:'2px',background:'#F0F2F7',borderRadius:'2px',transition:'all 0.25s',transform:mobileOpen?'rotate(45deg) translateY(7px)':'none',display:'block' }} />
+            <span style={{ width:'22px',height:'2px',background:'#F0F2F7',borderRadius:'2px',opacity:mobileOpen?0:1,transition:'all 0.25s',display:'block' }} />
+            <span style={{ width:'22px',height:'2px',background:'#F0F2F7',borderRadius:'2px',transition:'all 0.25s',transform:mobileOpen?'rotate(-45deg) translateY(-7px)':'none',display:'block' }} />
+          </button>
         </div>
       </div>
+      {/* Mobile menu */}
+      {mobileOpen && (
+        <div style={{ background:'rgba(7,8,12,0.98)',borderTop:'1px solid rgba(255,255,255,0.07)',padding:'16px 24px 20px' }}>
+          {[['#features','Features'],['#how','How it works'],['#pricing','Pricing'],['#faq','FAQ']].map(([h,l])=>(
+            <a key={h} href={h} onClick={()=>setMobileOpen(false)} style={{ display:'block',padding:'13px 0',fontFamily:'DM Sans, sans-serif',fontSize:'16px',color:'var(--text2)',textDecoration:'none',borderBottom:'1px solid rgba(255,255,255,0.05)' }}>{l}</a>
+          ))}
+          <div style={{ display:'flex',gap:'10px',marginTop:'16px' }}>
+            <Link href="/login" style={{ flex:1,padding:'12px',textAlign:'center',borderRadius:'10px',fontFamily:'DM Sans, sans-serif',fontWeight:500,fontSize:'15px',color:'var(--text)',textDecoration:'none',border:'1px solid rgba(255,255,255,0.1)' }}>Sign in</Link>
+            <Link href="/register" style={{ flex:1,padding:'12px',textAlign:'center',borderRadius:'10px',fontFamily:'DM Sans, sans-serif',fontWeight:700,fontSize:'15px',color:'var(--bg)',background:'var(--accent)',textDecoration:'none' }}>Get started →</Link>
+          </div>
+        </div>
+      )}
+      
     </nav>
   )
 }
@@ -587,14 +610,52 @@ export default function LandingPage() {
         ::-webkit-scrollbar-thumb{background:rgba(0,255,136,0.3);border-radius:2px;}
         ::selection{background:rgba(0,255,136,0.2);color:#00FF88;}
         section { animation: sectionIn 0.9s cubic-bezier(0.4,0,0.2,1) both; }
+        /* hamburger hidden on desktop */
+        .mob-ham { display:none!important; }
         @media(max-width:768px){
-          .nl{display:none!important;} .fg{grid-template-columns:1fr!important;}
-          .sw{flex-direction:column!important;} .sl::before{display:none!important;}
-          .mg{grid-template-columns:1fr!important;} .pw{flex-direction:column!important;align-items:center!important;}
-          .pw>*{max-width:100%!important;width:100%!important;} .tw{flex-direction:column!important;}
-          .hb{flex-direction:column!important;align-items:flex-start!important;}
-          .cp{padding:44px 28px!important;} .hero-grid{grid-template-columns:1fr!important;}
-          .fc{display:none!important;} .bento{grid-template-columns:1fr!important;}
+          /* Nav */
+          .nl { display:none!important; }
+          .mob-ham { display:flex!important; }
+          nav { top:0!important; }
+          .announce { display:none!important; }
+          /* Wrap */
+          .land-wrap { padding:0 20px!important; }
+          /* Hero */
+          .hero-section { padding:88px 0 56px!important; min-height:auto!important; }
+          .hero-grid { grid-template-columns:1fr!important; gap:0!important; }
+          .fc { display:none!important; }
+          .hb { flex-direction:column!important; align-items:stretch!important; }
+          .hb a { justify-content:center!important; text-align:center!important; }
+          /* Typography */
+          h1 { font-size:clamp(38px,11vw,54px)!important; letter-spacing:-1.5px!important; }
+          /* Sections */
+          section { padding:72px 0!important; }
+          /* Stats */
+          .stats-wrap { flex-wrap:wrap!important; justify-content:center!important; }
+          .stats-wrap > div { flex:1 1 40%!important; min-width:120px!important; }
+          /* Features */
+          .fg { grid-template-columns:1fr!important; }
+          /* Testimonials */
+          .tw { flex-direction:column!important; }
+          /* How it works steps */
+          .sw { flex-direction:column!important; gap:0!important; align-items:stretch!important; }
+          .step-line { display:none!important; }
+          .step-item { display:flex!important; gap:16px!important; align-items:center!important; text-align:left!important; padding:16px 0!important; flex:none!important; border-bottom:1px solid rgba(255,255,255,0.05)!important; }
+          .step-item:last-child { border-bottom:none!important; }
+          .step-num { margin:0!important; flex-shrink:0!important; width:44px!important; height:44px!important; }
+          /* Alert mockup grid */
+          .mg { grid-template-columns:1fr!important; gap:36px!important; }
+          /* Pricing */
+          .pw { flex-direction:column!important; align-items:center!important; }
+          .pw > * { max-width:100%!important; width:100%!important; min-width:unset!important; }
+          /* FAQ */
+          .faq-grid { grid-template-columns:1fr!important; gap:0!important; }
+          .faq-grid > div:first-child { display:none!important; }
+          /* CTA */
+          .cp { padding:44px 24px!important; }
+          /* Footer */
+          .foot-inner { flex-direction:column!important; align-items:flex-start!important; gap:20px!important; }
+          .foot-links { flex-wrap:wrap!important; gap:14px!important; }
         }
       `}</style>
 
@@ -606,7 +667,7 @@ export default function LandingPage() {
       <div style={{ position:'fixed',borderRadius:'50%',filter:'blur(100px)',pointerEvents:'none',zIndex:0,width:500,height:500,background:'rgba(59,130,246,0.025)',bottom:-100,left:-100,animation:'float 10s ease-in-out infinite reverse' }} />
 
       {/* Announcement */}
-      <div style={{ background:'linear-gradient(90deg,rgba(0,255,136,0.07),rgba(0,255,136,0.1),rgba(0,255,136,0.07))',borderBottom:'1px solid rgba(0,255,136,0.1)',padding:'10px 32px',textAlign:'center',fontFamily:'JetBrains Mono, monospace',fontSize:'12px',color:'var(--text2)',letterSpacing:'0.5px',position:'relative',zIndex:101 }}>
+      <div className="announce" style={{ background:'linear-gradient(90deg,rgba(0,255,136,0.07),rgba(0,255,136,0.1),rgba(0,255,136,0.07))',borderBottom:'1px solid rgba(0,255,136,0.1)',padding:'10px 32px',textAlign:'center',fontFamily:'JetBrains Mono, monospace',fontSize:'12px',color:'var(--text2)',letterSpacing:'0.5px',position:'relative',zIndex:101 }}>
         <span style={{ color:'var(--accent)',marginRight:'10px' }}>✦</span>
         Mobile push notifications now live for Pro & Premium users
         <Link href="/register" style={{ color:'var(--accent)',textDecoration:'none',marginLeft:'12px',fontWeight:600 }}>Try it →</Link>
@@ -615,8 +676,8 @@ export default function LandingPage() {
       <NavBar />
 
       {/* ── HERO ── */}
-      <section style={{ minHeight:'100vh',display:'flex',alignItems:'center',padding:'120px 0 80px',position:'relative',zIndex:1,animationDelay:'0s' }}>
-        <div style={{ ...W,width:'100%',position:'relative',zIndex:1 }}>
+      <section className="hero-section" style={{ minHeight:'100vh',display:'flex',alignItems:'center',padding:'120px 0 80px',position:'relative',zIndex:1,animationDelay:'0s' }}>
+        <div className="land-wrap" style={{ maxWidth:'1120px',margin:'0 auto',padding:'0 32px',width:'100%',position:'relative',zIndex:1 }}>
           <div className="hero-grid" style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:'48px',alignItems:'center' }}>
 
             {/* Left */}
@@ -674,7 +735,7 @@ export default function LandingPage() {
 
       {/* ── STATS ── */}
       <div style={{ padding:'52px 0',position:'relative',zIndex:1 }}>
-        <div style={{ ...W,display:'flex',justifyContent:'space-between',alignItems:'center',gap:'24px',flexWrap:'wrap' }}>
+        <div className="stats-wrap" style={{ ...W,display:'flex',justifyContent:'space-between',alignItems:'center',gap:'24px',flexWrap:'wrap' }}>
           {[{target:15,suffix:'min',label:'Scan interval'},{target:3,suffix:'+',label:'NLP layers'},{target:24,suffix:'/7',label:'Always running'},{target:100,suffix:'%',label:'Personalised'}].map((s,i)=>(
             <div key={i} data-reveal="up" style={{ textAlign:'center',flex:'1 1 120px' }}>
               <Counter target={s.target} suffix={s.suffix} />
@@ -751,10 +812,10 @@ export default function LandingPage() {
             <p style={{ fontSize:'17px',color:'var(--muted2)',maxWidth:'480px',margin:'0 auto',lineHeight:1.8 }}>A fully automated pipeline. Zero manual work required.</p>
           </div>
           <div data-reveal="up" className="sw sl" style={{ display:'flex',position:'relative',alignItems:'flex-start' }}>
-            <div style={{ position:'absolute',top:'24px',left:'60px',right:'60px',height:'1px',background:'linear-gradient(90deg,transparent,rgba(0,255,136,0.25),var(--accent),rgba(0,255,136,0.25),transparent)' }} />
+            <div className="step-line" style={{ position:'absolute',top:'24px',left:'60px',right:'60px',height:'1px',background:'linear-gradient(90deg,transparent,rgba(0,255,136,0.25),var(--accent),rgba(0,255,136,0.25),transparent)' }} />
             {[{n:'01',t:'Scan',d:'LinkedIn scanned every 15 min'},{n:'02',t:'Fetch',d:'Full description retrieved'},{n:'03',t:'Score',d:'NLP scored against your resume'},{n:'04',t:'Filter',d:'Only strong matches pass'},{n:'05',t:'Alert',d:'Instant notification sent'},].map(s=>(
-              <div key={s.n} style={{ flex:1,textAlign:'center',padding:'0 14px' }}>
-                <div style={{ width:'48px',height:'48px',borderRadius:'50%',border:'1px solid rgba(255,255,255,0.1)',background:'var(--bg2)',display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'JetBrains Mono, monospace',fontSize:'13px',color:'var(--accent)',margin:'0 auto 20px',position:'relative',zIndex:1,transition:'all 0.3s' }}
+              <div key={s.n} className="step-item" style={{ flex:1,textAlign:'center',padding:'0 14px' }}>
+                <div className="step-num" style={{ width:'48px',height:'48px',borderRadius:'50%',border:'1px solid rgba(255,255,255,0.1)',background:'var(--bg2)',display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'JetBrains Mono, monospace',fontSize:'13px',color:'var(--accent)',margin:'0 auto 20px',position:'relative',zIndex:1,transition:'all 0.3s' }}
                 onMouseEnter={e=>{e.currentTarget.style.borderColor='var(--accent)';e.currentTarget.style.boxShadow='0 0 20px rgba(0,255,136,0.25)';e.currentTarget.style.background='rgba(0,255,136,0.08)'}}
                 onMouseLeave={e=>{e.currentTarget.style.borderColor='rgba(255,255,255,0.1)';e.currentTarget.style.boxShadow='none';e.currentTarget.style.background='var(--bg2)'}}
                 >{s.n}</div>
@@ -819,7 +880,7 @@ export default function LandingPage() {
       {/* ── FAQ ── */}
       <section id="faq" style={{ padding:'120px 0',position:'relative',zIndex:1,animationDelay:'0.3s' }}>
         <div style={W}>
-          <div data-reveal="up" style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:'80px',alignItems:'start' }}>
+          <div data-reveal="up" className="faq-grid" style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:'80px',alignItems:'start' }}>
             <div>
               <p style={{ fontFamily:'JetBrains Mono, monospace',fontSize:'10px',color:'var(--accent)',letterSpacing:'3px',textTransform:'uppercase',marginBottom:'14px' }}>// faq</p>
               <h2 style={{ fontFamily:'Playfair Display, serif',fontSize:'clamp(32px,3.5vw,48px)',fontWeight:700,lineHeight:1.1,color:'var(--text)',marginBottom:'18px' }}>Common<br />questions</h2>
@@ -856,13 +917,13 @@ export default function LandingPage() {
       </section>
 
       {/* ── FOOTER ── */}
-      <footer style={{ borderTop:'1px solid rgba(255,255,255,0.05)',padding:'56px 0',position:'relative',zIndex:1 }}>
-        <div style={{ ...W,display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:'28px' }}>
+      <footer style={{ borderTop:'1px solid rgba(255,255,255,0.05)',padding:'48px 0',position:'relative',zIndex:1 }}>
+        <div className="foot-inner land-wrap" style={{ maxWidth:'1120px',margin:'0 auto',padding:'0 32px',display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:'24px' }}>
           <div>
-            <div style={{ fontFamily:'Playfair Display, serif',fontWeight:700,fontSize:'24px',marginBottom:'6px' }}>GetHiredASAP</div>
+            <div style={{ fontFamily:'Playfair Display, serif',fontWeight:700,fontSize:'22px',marginBottom:'6px' }}>GetHiredASAP</div>
             <div style={{ fontSize:'13px',color:'var(--muted2)' }}>AI-powered job matching · Built by Aryan Sawhney · Vancouver, BC</div>
           </div>
-          <div style={{ display:'flex',gap:'24px',flexWrap:'wrap' }}>
+          <div className="foot-links" style={{ display:'flex',gap:'20px',flexWrap:'wrap' }}>
             {[{h:'/login',l:'Dashboard'},{h:'/register',l:'Sign up'},{h:'#pricing',l:'Pricing'},{h:'#faq',l:'FAQ'},{h:'https://github.com/aryansawhney',l:'GitHub'},{h:'https://linkedin.com/in/aryansawhney',l:'LinkedIn'}].map(({h,l})=>(
               <Link key={h} href={h} style={{ fontFamily:'JetBrains Mono, monospace',fontSize:'12px',color:'var(--muted)',textDecoration:'none',transition:'color 0.2s' }}
               onMouseEnter={e=>e.currentTarget.style.color='var(--accent)'}
