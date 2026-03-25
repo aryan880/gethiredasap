@@ -1,0 +1,117 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+   url     = env("DATABASE_URL")
+}
+
+enum Tier {
+  FREE
+  PRO
+  PREMIUM
+}
+
+enum Channel {
+  PUSH
+  TELEGRAM
+  EMAIL
+  IN_APP
+}
+
+model User {
+  id               String      @id @default(cuid())
+  email            String      @unique
+  passwordHash     String
+  name             String
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+  resumeText       String?
+  resumeUrl        String?
+  threshold        Int         @default(15)
+  intervalMinutes  Int         @default(15)
+  isActive         Boolean     @default(true)
+  isAdmin          Boolean     @default(false)
+  tier             Tier        @default(FREE)
+  tierExpiresAt    DateTime?
+  stripeCustomerId String?
+  pushToken        String?
+  telegramId       String?
+  searches         JobSearch[]
+  matches          JobMatch[]
+  alerts           Alert[]
+  inviteCodes      InviteCode[]
+
+  @@map("users")
+}
+
+model JobSearch {
+  id        String   @id @default(cuid())
+  userId    String
+  role      String
+  location  String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("job_searches")
+}
+
+model Job {
+  id          String     @id
+  title       String
+  company     String
+  location    String
+  postedAt    DateTime?
+  link        String
+  description String?    @db.Text
+  salary      String?
+  scrapedAt   DateTime   @default(now())
+  matches     JobMatch[]
+
+  @@map("jobs")
+}
+
+model JobMatch {
+  id            String    @id @default(cuid())
+  userId        String
+  jobId         String
+  score         Float
+  expLabel      String?
+  isEarlyCareer Boolean   @default(false)
+  seenAt        DateTime  @default(now())
+  alertedAt     DateTime?
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  job           Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, jobId])
+  @@map("job_matches")
+}
+
+model Alert {
+  id       String   @id @default(cuid())
+  userId   String
+  jobId    String
+  channel  Channel
+  sentAt   DateTime @default(now())
+  openedAt DateTime?
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("alerts")
+}
+
+model InviteCode {
+  id              String    @id @default(cuid())
+  code            String    @unique
+  tier            Tier
+  userId          String?
+  createdBy       String
+  stripePaymentId String?
+  expiresAt       DateTime?
+  usedAt          DateTime?
+  createdAt       DateTime  @default(now())
+  user            User?     @relation(fields: [userId], references: [id])
+
+  @@map("invite_codes")
+}

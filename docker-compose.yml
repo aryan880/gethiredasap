@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  # PostgreSQL — our main database
+  postgres:
+    image: postgres:16
+    container_name: gethiredasap_postgres
+    environment:
+      POSTGRES_USER: aryan
+      POSTGRES_PASSWORD: password123
+      POSTGRES_DB: gethiredasap
+    ports:
+      - "5432:5432"    # your Mac port : container port
+    volumes:
+      - postgres_data:/var/lib/postgresql/data  # data persists between restarts
+
+  # Redis — for job queues and caching
+  redis:
+    image: redis:7-alpine
+    container_name: gethiredasap_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+volumes:
+  postgres_data:
+  redis_data:
