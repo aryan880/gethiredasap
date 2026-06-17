@@ -8,6 +8,13 @@ dotenv.config()
 const app = express()
 const PORT = process.env.PORT || 3001
 const isVercel = process.env.VERCEL === '1'
+const allowedOrigins = new Set([
+  'http://localhost:3000',
+  'http://192.168.1.110:3000',
+  'https://gethiredasap.vercel.app',
+  'https://gethiredasap-web.vercel.app',
+  process.env.CLIENT_URL,
+].filter(Boolean))
 
 function lazyRouter(loadRouter: () => unknown): RequestHandler {
   let router: RequestHandler | undefined
@@ -39,7 +46,14 @@ app.use(express.json())
 
 // Allow frontend to talk to this API
 app.use(cors({
-  origin: ['http://localhost:3000', 'http://192.168.1.110:3000'],
+  origin(origin, callback) {
+    if (!origin || allowedOrigins.has(origin) || /\.vercel\.app$/.test(origin)) {
+      callback(null, true)
+      return
+    }
+
+    callback(new Error(`Origin ${origin} is not allowed by CORS`))
+  },
   credentials: true,
 }))
 
