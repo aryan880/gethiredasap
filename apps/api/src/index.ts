@@ -12,6 +12,7 @@ dotenv.config()
 
 const app = express()
 const PORT = process.env.PORT || 3001
+const isVercel = process.env.VERCEL === '1'
 
 // Raw body for Stripe webhook — must come before express.json()
 app.use('/stripe/webhook', express.raw({ type: 'application/json' }))
@@ -33,6 +34,13 @@ app.use('/jobs', jobRoutes)
 
 // add after app.use('/jobs', jobRoutes)
 app.use('/stripe', stripeRoutes)
+
+app.get('/', (req, res) => {
+  res.json({
+    name: 'gethiredasap-api',
+    status: 'ok',
+  })
+})
 
 // ── SCRAPER TRIGGER ──
 // Manually trigger a scrape run (for testing)
@@ -59,11 +67,13 @@ app.get('/health', (req, res) => {
 })
 
 // ── START SERVER ──
-app.listen(PORT, () => {
-  console.log(`🚀 API running on http://localhost:${PORT}`)
-  console.log(`📊 Health check: http://localhost:${PORT}/health`)
-})
+if (!isVercel) {
+  app.listen(PORT, () => {
+    console.log(`🚀 API running on http://localhost:${PORT}`)
+    console.log(`📊 Health check: http://localhost:${PORT}/health`)
+  })
 
-startScheduler()
+  startScheduler()
+}
 
 export default app
