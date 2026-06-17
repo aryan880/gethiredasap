@@ -1,6 +1,6 @@
 import axios from 'axios'
 
-const productionApiUrl = 'https://gethiredasap-api.vercel.app'
+const productionApiUrl = '/api'
 const localApiUrl = 'http://localhost:3001'
 
 const fallbackApiUrl =
@@ -9,7 +9,7 @@ const fallbackApiUrl =
     : productionApiUrl
 
 const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || fallbackApiUrl,
+  baseURL: fallbackApiUrl,
   headers: { 'Content-Type': 'application/json' },
 })
 
