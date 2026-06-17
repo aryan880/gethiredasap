@@ -1,5 +1,9 @@
 import prisma from '../config/database'
 import { scrapeJobs, scoreJobs } from '../services/scraperService'
+import type { JobSearch } from '@prisma/client'
+
+type ActiveSearch = Pick<JobSearch, 'role' | 'location'>
+type ExistingMatch = { jobId: string }
 
 // ── MAIN SCRAPER WORKER ──
 // Runs on a schedule for each active user
@@ -38,7 +42,7 @@ export async function runScraperForUser(userId: string) {
 
     // ── STEP 1: SCRAPE ──
     console.log(`  📡 Scraping ${user.searches.length} searches...`)
-    const searches = user.searches.map(s => ({
+    const searches = user.searches.map((s: ActiveSearch) => ({
       role:     s.role,
       location: s.location,
     }))
@@ -57,7 +61,7 @@ export async function runScraperForUser(userId: string) {
       where: { userId },
       select: { jobId: true }
     })
-    const seenIds = new Set(existingMatches.map(m => m.jobId))
+    const seenIds = new Set(existingMatches.map((m: ExistingMatch) => m.jobId))
 
     const newJobs = rawJobs.filter((j: any) => !seenIds.has(j.id))
     console.log(`  🆕 ${newJobs.length} new unseen jobs`)
