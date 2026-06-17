@@ -1,8 +1,7 @@
 import prisma from '../config/database'
 import { scrapeJobs, scoreJobs } from '../services/scraperService'
-import type { JobSearch } from '@prisma/client'
 
-type ActiveSearch = Pick<JobSearch, 'role' | 'location'>
+type ActiveSearch = { role: string; location: string }
 type ExistingMatch = { jobId: string }
 
 // ── MAIN SCRAPER WORKER ──
