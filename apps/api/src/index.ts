@@ -1,18 +1,34 @@
 import express from 'express'
+import type { RequestHandler } from 'express'
 import cors from 'cors'
 import dotenv from 'dotenv'
-import authRoutes from './routes/auth'
-import userRoutes from './routes/users'
-import jobRoutes from './routes/jobs'
-import { runScraperForAllUsers, runScraperForUser } from './workers/scraperWorker'
-import { startScheduler } from './workers/scheduler'
-import stripeRoutes from './routes/stripe'
 
 dotenv.config()
 
 const app = express()
 const PORT = process.env.PORT || 3001
 const isVercel = process.env.VERCEL === '1'
+
+function lazyRouter(loadRouter: () => unknown): RequestHandler {
+  let router: RequestHandler | undefined
+
+  return (req, res, next) => {
+    try {
+      if (!router) {
+        const mod = loadRouter() as { default?: RequestHandler } | RequestHandler
+        router = typeof mod === 'function' ? mod : mod.default
+      }
+
+      if (!router) {
+        throw new Error('Route module did not export an Express router')
+      }
+
+      return router(req, res, next)
+    } catch (error) {
+      return next(error)
+    }
+  }
+}
 
 // Raw body for Stripe webhook — must come before express.json()
 app.use('/stripe/webhook', express.raw({ type: 'application/json' }))
@@ -28,12 +44,12 @@ app.use(cors({
 }))
 
 // ── ROUTES ──
-app.use('/auth', authRoutes)
-app.use('/users', userRoutes)
-app.use('/jobs', jobRoutes)
+app.use('/auth', lazyRouter(() => require('./routes/auth')))
+app.use('/users', lazyRouter(() => require('./routes/users')))
+app.use('/jobs', lazyRouter(() => require('./routes/jobs')))
 
 // add after app.use('/jobs', jobRoutes)
-app.use('/stripe', stripeRoutes)
+app.use('/stripe', lazyRouter(() => require('./routes/stripe')))
 
 app.get('/', (req, res) => {
   res.json({
@@ -46,6 +62,7 @@ app.get('/', (req, res) => {
 // Manually trigger a scrape run (for testing)
 app.post('/scrape/run', async (req, res) => {
   console.log('🔄 Manual scrape triggered')
+  const { runScraperForAllUsers } = require('./workers/scraperWorker')
   runScraperForAllUsers() // run in background
   res.json({ message: 'Scraper started' })
 })
@@ -53,6 +70,7 @@ app.post('/scrape/run', async (req, res) => {
 // Trigger for specific user
 app.post('/scrape/run/:userId', async (req, res) => {
   const { userId } = req.params
+  const { runScraperForUser } = require('./workers/scraperWorker')
   runScraperForUser(userId) // run in background
   res.json({ message: `Scraper started for user ${userId}` })
 })
@@ -68,6 +86,8 @@ app.get('/health', (req, res) => {
 
 // ── START SERVER ──
 if (!isVercel) {
+  const { startScheduler } = require('./workers/scheduler')
+
   app.listen(PORT, () => {
     console.log(`🚀 API running on http://localhost:${PORT}`)
     console.log(`📊 Health check: http://localhost:${PORT}/health`)
