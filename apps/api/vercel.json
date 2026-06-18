@@ -2,5 +2,11 @@
   "framework": "nextjs",
   "installCommand": "npm install --prefix=../..",
   "buildCommand": "npm --prefix=../.. --workspace web run build",
-  "outputDirectory": "../web/.next"
+  "outputDirectory": "../web/.next",
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "/api/:path*"
+    }
+  ]
 }
