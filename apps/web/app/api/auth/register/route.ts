@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
 import prisma from '@/lib/server/prisma'
+import { authErrorMessage } from '@/lib/server/errors'
 import { createAccessToken, createRefreshToken } from '@/lib/server/tokens'
 
 const userSelect = {
@@ -64,7 +65,7 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error('Register error:', error)
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: authErrorMessage(error) },
       { status: 500 },
     )
   }
