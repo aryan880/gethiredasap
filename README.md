@@ -62,7 +62,7 @@ docker-compose.yml
 2. Collect listings for each role/location query.
 3. Remove listings already matched for that user.
 4. Score new listings in a batch.
-5. adjust the score using detected experience requirements and early-career signals.
+5. Adjust the score using detected experience requirements and early-career signals.
 6. Store jobs and user-specific matches, then create an in-app alert record when a threshold is met.
 
 The scoring service uses `all-MiniLM-L6-v2` when sentence-transformers is installed. If it is unavailable, the service falls back to TF-IDF cosine similarity.
