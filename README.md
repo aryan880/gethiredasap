@@ -1,297 +1,140 @@
-<div align="center">
-
-```
-╔═══════════════════════════════════════════════════════════╗
-║                                                           ║
-║   ●  GetHiredASAP                          RADAR LIVE ●  ║
-║                                                           ║
-║   Scanning LinkedIn...                                    ║
-║   ████████████████████░░░░░  847 jobs found              ║
-║                                                           ║
-║   ✅ Frontend Developer @ Shopify    →  78% match         ║
-║   ✅ Sales Representative @ Fresha   →  65% match         ║
-║   👍 Account Executive @ Telus       →  48% match         ║
-║                                                           ║
-║   📲 2 alerts sent · Next scan in 14 min                 ║
-║                                                           ║
-╚═══════════════════════════════════════════════════════════╝
-```
-
 # GetHiredASAP
 
-**AI-powered job matching. LinkedIn scanned every 15 minutes.**
-**NLP scored against your resume. You apply first.**
+A full-stack portfolio project that collects recent job listings, compares them with a candidate profile, and ranks likely matches so applications can be prioritized quickly.
 
-[![Live](https://img.shields.io/badge/LIVE-gethiredasap.ca-00FF88?style=for-the-badge&logo=vercel&logoColor=black)](https://gethiredasap.ca)
-[![Next.js](https://img.shields.io/badge/Next.js-16-black?style=for-the-badge&logo=next.js)](https://nextjs.org)
-[![Python](https://img.shields.io/badge/Python-FastAPI-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://fastapi.tiangolo.com)
-[![Stripe](https://img.shields.io/badge/Stripe-Payments-635BFF?style=for-the-badge&logo=stripe&logoColor=white)](https://stripe.com)
-[![Expo](https://img.shields.io/badge/Expo-Mobile-000020?style=for-the-badge&logo=expo)](https://expo.dev)
+[Product site](https://gethiredasap.ca) · [GitHub profile](https://github.com/aryan880)
 
-</div>
+> **Project status:** active portfolio build. The repository demonstrates the product architecture and implemented flows; it does not claim production-scale usage or matching accuracy benchmarks.
 
----
+## What is implemented
 
-## ◈ The Problem
+- Account registration and login with bcrypt password hashing and JWT access/refresh tokens
+- Search preferences and candidate resume text stored through Prisma
+- A Python/FastAPI ingestion service for collecting recent public job listings
+- Batch job-to-resume scoring using sentence-transformer embeddings, with a TF-IDF fallback
+- Early-career signal detection and experience-requirement extraction
+- PostgreSQL persistence for jobs, matches, searches, users, and in-app alert records
+- Ranked and paginated match APIs with score and early-career filters
+- Stripe Checkout and webhook flows for subscription tiers
+- A Next.js dashboard and pricing experience
+- Local PostgreSQL and Redis services through Docker Compose
 
-Most people apply to jobs **hours after posting** — competing with hundreds of applicants who got there first.
+External messaging notifications and mobile clients are roadmap work; the current worker records qualifying alerts in the application database.
 
-**GetHiredASAP flips that.**
+## Architecture
 
-```
-  LinkedIn posts a job
-         │
-         ▼
-  ┌─────────────────┐
-  │   Job Radar     │  ← Scans every 15 minutes
-  │   📡 LIVE       │
-  └────────┬────────┘
-           │
-           ▼
-  ┌─────────────────┐
-  │   NLP Engine    │  ← sentence-transformers scores 0–100%
-  │   🧠 Matching   │
-  └────────┬────────┘
-           │
-           ▼
-  ┌─────────────────┐
-  │   Your Feed     │  ← Only strong matches, ranked by score
-  │   ✅ 78% match  │
-  └────────┬────────┘
-           │
-           ▼
-     You apply first.
+```mermaid
+flowchart LR
+    W["Next.js web app"] --> A["Express API"]
+    A --> D["PostgreSQL via Prisma"]
+    A --> S["FastAPI listing service"]
+    A --> N["FastAPI scoring service"]
+    N --> M["Embeddings or TF-IDF"]
+    A --> P["Stripe"]
 ```
 
----
+## Technology
 
-## ◆ Features
+| Area | Tools |
+|---|---|
+| Web | Next.js 16, React 19, TypeScript, TanStack Query, Tailwind CSS |
+| API | Node.js, Express, Zod, JWT, bcrypt |
+| Data | PostgreSQL, Prisma, Redis |
+| Python services | FastAPI, sentence-transformers, scikit-learn, Beautiful Soup |
+| Payments | Stripe Checkout and webhooks |
+| Tooling | npm workspaces, Turborepo, Docker Compose |
 
-| Feature | Description |
-|---------|-------------|
-| 📡 **Real-Time Scanning** | LinkedIn scraped every 15 minutes automatically |
-| 🧠 **Semantic NLP** | `sentence-transformers` understands meaning, not just keywords |
-| ⭐ **Early Career Detection** | Flags entry-level roles even when not labelled "junior" |
-| 💰 **Salary Extraction** | Pulls compensation ranges from job descriptions |
-| 🏆 **Ranked Feed** | Jobs sorted by match score — highest first, always |
-| 📲 **Instant Alerts** | Telegram notifications the moment a strong match is found |
-| 📱 **Mobile App** | React Native app for iOS and Android |
-| 💳 **Monetisation** | Free / Pro / Premium tiers via Stripe |
+## Repository layout
 
----
-
-## ◇ Stack
-
-```
-┌─────────────────────────────────────────────────────┐
-│                    Frontend                         │
-│  Next.js 16  ·  TypeScript  ·  React Query          │
-├─────────────────────────────────────────────────────┤
-│                     API                             │
-│  Node.js  ·  Express  ·  Prisma  ·  PostgreSQL      │
-│  Redis  ·  JWT Auth  ·  Stripe Webhooks             │
-├─────────────────────────────────────────────────────┤
-│                  Python Services                    │
-│  FastAPI  ·  sentence-transformers  ·  BeautifulSoup│
-│  TF-IDF fallback  ·  scikit-learn                   │
-├─────────────────────────────────────────────────────┤
-│                    Mobile                           │
-│  React Native  ·  Expo  ·  Zustand  ·  SecureStore  │
-├─────────────────────────────────────────────────────┤
-│                 Infrastructure                      │
-│  Hostinger VPS  ·  Nginx  ·  PM2  ·  Docker         │
-│  Let's Encrypt SSL  ·  GitHub CI                    │
-└─────────────────────────────────────────────────────┘
+```text
+apps/
+  api/            Express API, Prisma schema, authentication, matching pipeline
+  web/            Next.js application
+packages/
+  nlp/            FastAPI scoring service
+  scraper/        FastAPI listing-ingestion service
+docker-compose.yml
 ```
 
----
+## Matching pipeline
 
-## ◉ Project Structure
+1. Load an active user's searches and candidate text.
+2. Collect listings for each role/location query.
+3. Remove listings already matched for that user.
+4. Score new listings in a batch.
+5. adjust the score using detected experience requirements and early-career signals.
+6. Store jobs and user-specific matches, then create an in-app alert record when a threshold is met.
 
-```
-gethiredasap/
-│
-├── apps/
-│   ├── api/                  # Node.js + Express + Prisma
-│   │   ├── src/
-│   │   │   ├── routes/       # auth, jobs, users, stripe
-│   │   │   ├── workers/      # scraperWorker.ts (cron)
-│   │   │   └── config/       # db, redis
-│   │   └── prisma/
-│   │       └── schema.prisma
-│   │
-│   └── web/                  # Next.js 16
-│       └── app/
-│           ├── (auth)/       # login, register
-│           ├── (dashboard)/  # feed, top, settings, pricing
-│           └── page.tsx      # landing page
-│
-├── packages/
-│   ├── nlp/                  # Python NLP microservice :8002
-│   │   └── main.py           # sentence-transformers scoring
-│   └── scraper/              # Python scraper microservice :8001
-│       └── main.py           # LinkedIn public API
-│
-└── gethiredasap-mobile/      # React Native + Expo (standalone)
-    └── src/
-        ├── screens/          # Feed, Top, Settings, Pricing
-        ├── store/            # Zustand auth store
-        └── lib/              # API client, theme
-```
+The scoring service uses `all-MiniLM-L6-v2` when sentence-transformers is installed. If it is unavailable, the service falls back to TF-IDF cosine similarity.
 
----
+## Run locally
 
-## ◈ How the NLP Works
+### Requirements
 
-```python
-# Each resume and job description embedded into 384-dim vectors
-model = SentenceTransformer('all-MiniLM-L6-v2')
+- Node.js 18+
+- npm 10+
+- Python 3.12+
+- Docker Desktop
 
-resume_embedding = model.encode(resume_text)
-job_embedding    = model.encode(job_description)
-
-# Cosine similarity → base score
-base_score = cosine_similarity(resume_embedding, job_embedding)
-
-# Adjustments
-if years_required > years_in_resume:
-    score -= experience_gap_penalty   # penalise experience gap
-
-if is_entry_level_role:
-    score += early_career_boost       # surface to top of feed
-
-# TF-IDF fallback when semantic confidence is low
-if base_score < threshold:
-    score = tfidf_score(resume_text, job_description)
-```
-
----
-
-## ◆ Running Locally
-
-**Requirements:** Node 20+, Python 3.12, Docker Desktop
+### 1. Install and start data services
 
 ```bash
-# 1. Clone
 git clone https://github.com/aryan880/gethiredasap.git
 cd gethiredasap
-
-# 2. Start database + cache
-docker compose up -d
-
-# 3. Install dependencies
 npm install
+docker compose up -d
+```
 
-# 4. Environment setup
+The Docker password is for local development only. Use separate secrets for any deployed environment.
+
+### 2. Configure the API
+
+```bash
 cp apps/api/.env.example apps/api/.env
-# → Fill in DATABASE_URL, JWT_SECRET, STRIPE_* keys
-
-# 5. Run migrations
-cd apps/api && npx prisma migrate dev && cd ../..
-
-# 6. Python environments
-cd packages/nlp     && python3 -m venv venv && source venv/bin/activate && pip install -r requirements.txt
-cd packages/scraper && python3 -m venv venv && source venv/bin/activate && pip install -r requirements.txt
+cd apps/api
+npx prisma migrate dev
+cd ../..
 ```
 
-Then open 5 terminals:
+Replace every placeholder secret before running the API.
+
+### 3. Install Python dependencies
 
 ```bash
-cd apps/api      && npm run dev                                           # :3001
-cd apps/web      && npm run dev                                           # :3000
-cd packages/nlp     && source venv/bin/activate && uvicorn main:app --port 8002
-cd packages/scraper && source venv/bin/activate && uvicorn main:app --port 8001
-stripe listen --forward-to localhost:3001/stripe/webhook
+python3 -m venv packages/nlp/.venv
+source packages/nlp/.venv/bin/activate
+pip install -r packages/nlp/requirements.txt
+deactivate
+
+python3 -m venv packages/scraper/.venv
+source packages/scraper/.venv/bin/activate
+pip install -r packages/scraper/requirements.txt
+deactivate
 ```
 
-Open [http://localhost:3000](http://localhost:3000)
+### 4. Start the services
 
----
-
-## ◇ Deployment Architecture
-
-```
-                    gethiredasap.ca
-                          │
-                    ┌─────▼─────┐
-                    │   Nginx   │  ← SSL (Let's Encrypt)
-                    │  :80/:443 │    Reverse proxy
-                    └─────┬─────┘
-                          │
-           ┌──────────────┼──────────────┐
-           │              │              │
-    ┌──────▼──────┐ ┌─────▼──────┐      │
-    │  Next.js    │ │    API     │      │
-    │   :3000     │ │   :3001    │      │
-    └─────────────┘ └─────┬──────┘      │
-                          │             │
-              ┌───────────┼───────────┐ │
-              │           │           │ │
-       ┌──────▼───┐ ┌─────▼────┐     │ │
-       │   NLP    │ │ Scraper  │     │ │
-       │  :8002   │ │  :8001   │     │ │
-       └──────────┘ └──────────┘     │ │
-                                     │ │
-                    ┌────────────┐   │ │
-                    │   Docker   │◄──┘ │
-                    │ PostgreSQL │     │
-                    │   Redis    │◄────┘
-                    └────────────┘
-
-              All managed by PM2 · Auto-restart on crash
-```
-
----
-
-## ◉ Environment Variables
+Run each command in its own terminal:
 
 ```bash
-# apps/api/.env
-PORT=3001
-NODE_ENV=production
-CLIENT_URL=https://gethiredasap.ca
-
-DATABASE_URL=postgresql://user:pass@localhost:5432/gethiredasap
-REDIS_URL=redis://localhost:6379
-
-JWT_SECRET=
-JWT_REFRESH_SECRET=
-JWT_EXPIRES_IN=15m
-JWT_REFRESH_EXPIRES_IN=7d
-
-STRIPE_SECRET_KEY=sk_live_...
-STRIPE_WEBHOOK_SECRET=whsec_...
-STRIPE_PRO_PRICE_ID=price_...
-STRIPE_PREMIUM_PRICE_ID=price_...
+npm --workspace apps/web run dev
+npm --workspace apps/api run dev
+source packages/nlp/.venv/bin/activate && uvicorn packages.nlp.main:app --port 8002
+source packages/scraper/.venv/bin/activate && uvicorn packages.scraper.main:app --port 8001
 ```
 
----
+Open [http://localhost:3000](http://localhost:3000).
 
-## ◈ Roadmap
+## Responsible use
 
-```
-✅ LinkedIn scraping + NLP matching
-✅ Web dashboard — feed, top, settings, pricing
-✅ Stripe payments — Free / Pro / Premium
-✅ Telegram bot alerts
-✅ VPS deployment + SSL domain
-✅ React Native mobile app (iOS + Android)
-⬜ Email alerts for Premium users
-⬜ Admin dashboard
-⬜ Indeed + Glassdoor + Workday scrapers
-⬜ Push notifications (Expo)
-⬜ App Store + Play Store submission
-```
+Listing sources can change and may impose their own terms and rate limits. This project is intended to demonstrate full-stack architecture, data processing, and matching logic; anyone running the ingestion service is responsible for complying with applicable source terms and privacy requirements.
 
----
+## What this project demonstrates
 
-<div align="center">
+- Designing a multi-service TypeScript/Python system
+- Connecting a product UI to authenticated APIs and relational data
+- Building an explainable scoring pipeline with a graceful fallback
+- Separating ingestion, matching, persistence, and presentation concerns
+- Integrating third-party billing without committing credentials
 
-Built by **Aryan Sawhney** · Vancouver, BC
-
-[![LinkedIn](https://img.shields.io/badge/LinkedIn-aryansawhney-0077B5?style=flat-square&logo=linkedin)](https://linkedin.com/in/aryansawhney)
-[![GitHub](https://img.shields.io/badge/GitHub-aryan880-181717?style=flat-square&logo=github)](https://github.com/aryan880)
-
-*Built with Next.js · FastAPI · sentence-transformers · Stripe · React Native · ☕*
-
-</div>
+Built by [Aryan Sawhney](https://github.com/aryan880).
