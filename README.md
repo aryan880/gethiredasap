@@ -1,6 +1,6 @@
 # GetHiredASAP
 
-A full-stack portfolio project that collects recent job listings, compares them with a candidate profile, and ranks likely matches so applications can be prioritized quickly.
+A full-stack job discovery and application platform that combines a broad job-ingestion engine with personalized resume matching, saved searches, and an application CRM.
 
 [Product site](https://gethiredasap.ca) · [GitHub profile](https://github.com/aryan880)
 
@@ -9,17 +9,16 @@ A full-stack portfolio project that collects recent job listings, compares them 
 ## What is implemented
 
 - Account registration and login with bcrypt password hashing and JWT access/refresh tokens
-- Search preferences and candidate resume text stored through Prisma
-- A Python/FastAPI ingestion service for collecting recent public job listings
+- Protected dashboards, job feeds, saved searches, and application workflow APIs
+- AI Job Hunter integration for normalized, deduplicated listings from job boards, ATS providers, public-sector portals, and employer career pages
 - Batch job-to-resume scoring using sentence-transformer embeddings, with a TF-IDF fallback
-- Early-career signal detection and experience-requirement extraction
-- PostgreSQL persistence for jobs, matches, searches, users, and in-app alert records
-- Ranked and paginated match APIs with score and early-career filters
+- Explainable personalized matches and rule-based resume-gap analysis
+- Saved searches with strict, role-family, and broad matching modes
+- Application tracking for saved, applied, interview, offer, and rejected states
+- PostgreSQL persistence for users, resumes, saved searches, alerts, and application workflow state
+- Server-side job pagination, filtering, sorting, dashboard analytics, and source health views
 - Stripe Checkout and webhook flows for subscription tiers
-- A Next.js dashboard and pricing experience
 - Local PostgreSQL and Redis services through Docker Compose
-
-External messaging notifications and mobile clients are roadmap work; the current worker records qualifying alerts in the application database.
 
 ## Architecture
 
@@ -27,20 +26,25 @@ External messaging notifications and mobile clients are roadmap work; the curren
 flowchart LR
     W["Next.js web app"] --> A["Express API"]
     A --> D["PostgreSQL via Prisma"]
-    A --> S["FastAPI listing service"]
-    A --> N["FastAPI scoring service"]
+    A --> J["AI Job Hunter API"]
+    J --> S["SQLite job index"]
+    J --> C["Job boards and ATS sources"]
+    A --> N["FastAPI NLP service"]
     N --> M["Embeddings or TF-IDF"]
     A --> P["Stripe"]
 ```
+
+AI Job Hunter is the discovery engine and remains the source of truth for job listings. GetHiredASAP stores user accounts, resumes, saved searches, alerts, and application workflow state. The legacy scraper package remains available but is disabled by default.
 
 ## Technology
 
 | Area | Tools |
 |---|---|
-| Web | Next.js 16, React 19, TypeScript, TanStack Query, Tailwind CSS |
+| Web | Next.js 16, React 19, TypeScript, TanStack Query |
 | API | Node.js, Express, Zod, JWT, bcrypt |
 | Data | PostgreSQL, Prisma, Redis |
-| Python services | FastAPI, sentence-transformers, scikit-learn, Beautiful Soup |
+| Matching | FastAPI, sentence-transformers, scikit-learn |
+| Job ingestion | AI Job Hunter, Python, SQLite, JobSpy, ATS adapters |
 | Payments | Stripe Checkout and webhooks |
 | Tooling | npm workspaces, Turborepo, Docker Compose |
 
@@ -48,22 +52,25 @@ flowchart LR
 
 ```text
 apps/
-  api/            Express API, Prisma schema, authentication, matching pipeline
-  web/            Next.js application
+  api/            Express API, Prisma schema, auth, workflow, job proxy
+  web/            Next.js dashboard and job-search experience
 packages/
-  nlp/            FastAPI scoring service
-  scraper/        FastAPI listing-ingestion service
+  nlp/            FastAPI semantic scoring service
+  scraper/        Legacy listing service, disabled by default
 docker-compose.yml
 ```
 
-## Matching pipeline
+AI Job Hunter currently runs as a separate Python service and exposes its SQLite job index through an internal-key-protected FastAPI API.
 
-1. Load an active user's searches and candidate text.
-2. Collect listings for each role/location query.
-3. Remove listings already matched for that user.
-4. Score new listings in a batch.
-5. Adjust the score using detected experience requirements and early-career signals.
-6. Store jobs and user-specific matches, then create an in-app alert record when a threshold is met.
+## Job and matching flow
+
+1. AI Job Hunter collects, validates, normalizes, and deduplicates listings.
+2. GetHiredASAP requests paginated jobs through the internal API boundary.
+3. The Express API loads the authenticated user resume and preferences from PostgreSQL.
+4. Up to 100 candidate jobs are scored in one NLP batch request.
+5. Semantic, rule, freshness, location, and source signals are combined into explainable matches.
+6. If NLP is unavailable, matching falls back to the rule-based scorer.
+7. Application status and recruiter notes remain user-specific in PostgreSQL.
 
 The scoring service uses `all-MiniLM-L6-v2` when sentence-transformers is installed. If it is unavailable, the service falls back to TF-IDF cosine similarity.
 
@@ -73,8 +80,9 @@ The scoring service uses `all-MiniLM-L6-v2` when sentence-transformers is instal
 
 - Node.js 18+
 - npm 10+
-- Python 3.12+
+- Python 3.10+
 - Docker Desktop
+- A local AI Job Hunter checkout
 
 ### 1. Install and start data services
 
@@ -85,8 +93,6 @@ npm install
 docker compose up -d
 ```
 
-The Docker password is for local development only. Use separate secrets for any deployed environment.
-
 ### 2. Configure the API
 
 ```bash
@@ -96,45 +102,82 @@ npx prisma migrate dev
 cd ../..
 ```
 
-Replace every placeholder secret before running the API.
+Replace every placeholder secret before running the API. `JOB_HUNTER_API_KEY` must match AI Job Hunter's `AI_JOB_HUNTER_API_KEY`, and `NLP_API_KEY` must match the NLP service configuration.
 
-### 3. Install Python dependencies
+### 3. Install NLP dependencies
 
 ```bash
 python3 -m venv packages/nlp/.venv
 source packages/nlp/.venv/bin/activate
 pip install -r packages/nlp/requirements.txt
 deactivate
-
-python3 -m venv packages/scraper/.venv
-source packages/scraper/.venv/bin/activate
-pip install -r packages/scraper/requirements.txt
-deactivate
 ```
 
 ### 4. Start the services
 
-Run each command in its own terminal:
+Run each command in its own terminal.
+
+AI Job Hunter:
 
 ```bash
-npm --workspace apps/web run dev
-npm --workspace apps/api run dev
-source packages/nlp/.venv/bin/activate && uvicorn packages.nlp.main:app --port 8002
-source packages/scraper/.venv/bin/activate && uvicorn packages.scraper.main:app --port 8001
+cd "../AI Job Hunter"
+source .venv/bin/activate
+uvicorn api_app:app --host 127.0.0.1 --port 8010 --reload
+```
+
+NLP service:
+
+```bash
+cd gethiredasap
+source packages/nlp/.venv/bin/activate
+uvicorn packages.nlp.main:app --host 127.0.0.1 --port 8002 --reload
+```
+
+Express API and Next.js web app:
+
+```bash
+npm --workspace api run dev
+npm --workspace web run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000).
 
+## Common commands
+
+```bash
+npm --workspace api run build
+npm --workspace web run build
+docker compose ps
+curl http://localhost:3001/health
+```
+
+The authenticated job routes are mounted under `/api/job-hunter`, including jobs, summary, personalized matches, resume-gap analysis, command-center analytics, and manual refresh.
+
+## Legacy scraper
+
+The old scraper code remains under `packages/scraper`, but the API does not start its scheduler or perform an initial scrape unless explicitly enabled:
+
+```text
+ENABLE_LEGACY_SCRAPER=false
+```
+
+Expected API startup output:
+
+```text
+Legacy scraper disabled. Using AI Job Hunter API as job source.
+```
+
 ## Responsible use
 
-Listing sources can change and may impose their own terms and rate limits. This project is intended to demonstrate full-stack architecture, data processing, and matching logic; anyone running the ingestion service is responsible for complying with applicable source terms and privacy requirements.
+Job sources can change and may impose their own terms and rate limits. Anyone operating the ingestion service is responsible for source terms, privacy requirements, secure secret management, and appropriate request frequency.
 
 ## What this project demonstrates
 
-- Designing a multi-service TypeScript/Python system
+- Designing a multi-service TypeScript and Python system
 - Connecting a product UI to authenticated APIs and relational data
-- Building an explainable scoring pipeline with a graceful fallback
-- Separating ingestion, matching, persistence, and presentation concerns
+- Separating global job discovery from per-user personalization and workflow state
+- Building explainable semantic matching with a graceful fallback
+- Managing server-side pagination, saved searches, and application tracking
 - Integrating third-party billing without committing credentials
 
 Built by [Aryan Sawhney](https://github.com/aryan880).
