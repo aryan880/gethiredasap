@@ -15,6 +15,9 @@ A full-stack job discovery and application platform that combines a broad job-in
 - Explainable personalized matches and rule-based resume-gap analysis
 - Saved searches with strict, role-family, and broad matching modes
 - Application tracking for saved, applied, interview, offer, and rejected states
+- Application Studio for verification-gated document packages, public contacts, outreach drafts, and human approval
+- Encrypted candidate document vault with separate software, IT-support, and systems-analyst master resumes
+- Cross-source job observations with requisition-aware deduplication and explicit application-URL provenance
 - PostgreSQL persistence for users, resumes, saved searches, alerts, and application workflow state
 - Server-side job pagination, filtering, sorting, dashboard analytics, and source health views
 - Stripe Checkout and webhook flows for subscription tiers
@@ -35,6 +38,8 @@ flowchart LR
 ```
 
 AI Job Hunter is the discovery engine and remains the source of truth for job listings. GetHiredASAP stores user accounts, resumes, saved searches, alerts, and application workflow state. The legacy scraper package remains available but is disabled by default.
+
+The verification, document, contact, and ChatGPT Work integration design is documented in [Application Pipeline](docs/APPLICATION_PIPELINE.md).
 
 ## Technology
 
@@ -103,6 +108,7 @@ cd ../..
 ```
 
 Replace every placeholder secret before running the API. `JOB_HUNTER_API_KEY` must match AI Job Hunter's `AI_JOB_HUNTER_API_KEY`, and `NLP_API_KEY` must match the NLP service configuration.
+Generate `DOCUMENT_ENCRYPTION_KEY` with `openssl rand -base64 32`; it is required for the private document vault.
 
 ### 3. Install NLP dependencies
 
