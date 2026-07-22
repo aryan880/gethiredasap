@@ -4,13 +4,15 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useAuthStore } from '@/lib/store'
 import { useState, useRef, useEffect } from 'react'
+import api from '@/lib/api'
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router   = useRouter()
   const pathname = usePathname()
-  const { user, logout } = useAuthStore()
+  const { user, logout, clearAuth } = useAuthStore()
   const [menuOpen,   setMenuOpen]   = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [authChecked, setAuthChecked] = useState(false)
   const menuRef   = useRef<HTMLDivElement>(null)
   const mobileRef = useRef<HTMLDivElement>(null)
 
@@ -31,15 +33,66 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // Close mobile menu on route change
   useEffect(() => { setMobileOpen(false) }, [pathname])
 
+  useEffect(() => {
+    let cancelled = false
+
+    async function verifySession() {
+      const token = localStorage.getItem('accessToken')
+
+      if (!token) {
+        clearAuth()
+        router.replace(`/login?next=${encodeURIComponent(pathname)}`)
+        return
+      }
+
+      try {
+        const res = await api.get('/auth/me')
+        if (cancelled) return
+        useAuthStore.getState().setAuth(res.data.user, token)
+        setAuthChecked(true)
+      } catch {
+        if (cancelled) return
+        clearAuth()
+        router.replace(`/login?next=${encodeURIComponent(pathname)}`)
+      }
+    }
+
+    verifySession()
+
+    return () => {
+      cancelled = true
+    }
+  }, [clearAuth, pathname, router])
+
   const links = [
     { href: '/dashboard', label: 'Feed',     icon: '◈' },
     { href: '/top',       label: 'Top',      icon: '◆' },
+    { href: '/job-hunter', label: 'Hunter',  icon: '✦' },
+    { href: '/saved-searches', label: 'Searches', icon: '⌕' },
     { href: '/pricing',   label: 'Pricing',  icon: '◇' },
     { href: '/settings',  label: 'Settings', icon: '◉' },
   ]
 
   const tierColor = user?.tier === 'PREMIUM' ? '#a78bfa' : '#00FF88'
   const initial   = user?.name?.charAt(0).toUpperCase() || '?'
+
+  if (!authChecked) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        background: '#07080C',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: '#6B7280',
+        fontFamily: 'JetBrains Mono, monospace',
+        fontSize: '12px',
+        letterSpacing: '1px',
+      }}>
+        VERIFYING SESSION...
+      </div>
+    )
+  }
 
   return (
     <div style={{ minHeight:'100vh', background:'#07080C', position:'relative' }}>
@@ -250,4 +303,4 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </main>
     </div>
   )
-} 
+}

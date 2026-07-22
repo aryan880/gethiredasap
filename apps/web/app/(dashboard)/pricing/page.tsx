@@ -219,7 +219,7 @@ export default function PricingPage() {
         </div>
       ) : (
         <div style={{ display:'flex',gap:'14px',flexWrap:'wrap',justifyContent:'center',animation:'fadeUp 0.5s ease 0.1s both' }}>
-          {prices.map((p:any)=><PricingCard key={p.id} price={p} isCurrentPlan={user?.tier===p.tier} />)}
+          {prices.map((p:any)=><PricingCard key={p.id || p.tier} price={p} isCurrentPlan={user?.tier===p.tier} />)}
         </div>
       )}
 
