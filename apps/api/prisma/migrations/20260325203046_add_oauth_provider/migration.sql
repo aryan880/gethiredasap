@@ -1,0 +1,4 @@
+-- Historical placeholder migration.
+-- This migration already exists in the local database migration history,
+-- but the original file was missing from the repository.
+-- No schema changes are applied here.

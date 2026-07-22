@@ -20,6 +20,15 @@ enum Channel {
   IN_APP
 }
 
+enum ApplicationStatus {
+  NEW
+  SAVED
+  APPLIED
+  INTERVIEW
+  OFFER
+  REJECTED
+}
+
 model User {
   id               String      @id @default(cuid())
   email            String      @unique
@@ -39,11 +48,36 @@ model User {
   pushToken        String?
   telegramId       String?
   searches         JobSearch[]
+  savedSearches    SavedSearch[]
   matches          JobMatch[]
   alerts           Alert[]
   inviteCodes      InviteCode[]
+  applications     JobApplication[]
 
   @@map("users")
+}
+
+model JobApplication {
+  id              String            @id @default(cuid())
+  userId          String
+  externalJobId   String
+  source          String?
+  title           String?
+  company         String?
+  location        String?
+  jobUrl          String?
+  status          ApplicationStatus @default(NEW)
+  recruiterName   String?
+  recruiterEmail  String?
+  followUpNotes   String?           @db.Text
+  appliedDate     DateTime?
+  createdAt       DateTime          @default(now())
+  lastUpdated     DateTime          @updatedAt
+  user            User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, externalJobId])
+  @@index([userId, status])
+  @@map("job_applications")
 }
 
 model JobSearch {
@@ -56,6 +90,48 @@ model JobSearch {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("job_searches")
+}
+
+model SavedSearch {
+  id                String             @id @default(cuid())
+  userId            String
+  name              String
+  keywords          String
+  location          String?
+  category          String?
+  workMode          String?
+  minimumMatchScore Int                @default(0)
+  companies         Json?
+  sources           Json?
+  frequency         String             @default("daily")
+  matchMode         String             @default("balanced")
+  excludeSeniorRoles Boolean           @default(false)
+  preferJuniorRoles Boolean            @default(false)
+  excludeContract   Boolean            @default(false)
+  excludeStaffingAgencies Boolean      @default(false)
+  enabled           Boolean            @default(true)
+  lastEvaluatedAt   DateTime?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  alertEvents       SavedSearchAlert[]
+
+  @@index([userId, enabled])
+  @@map("saved_searches")
+}
+
+model SavedSearchAlert {
+  id            String      @id @default(cuid())
+  savedSearchId String
+  externalJobId String
+  payload       Json
+  matchedAt     DateTime    @default(now())
+  notifiedAt    DateTime?
+  savedSearch   SavedSearch @relation(fields: [savedSearchId], references: [id], onDelete: Cascade)
+
+  @@unique([savedSearchId, externalJobId])
+  @@index([savedSearchId, matchedAt])
+  @@map("saved_search_alerts")
 }
 
 model Job {

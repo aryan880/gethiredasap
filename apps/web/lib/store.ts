@@ -18,6 +18,7 @@ interface AuthStore {
   isLoggedIn:   boolean
   setAuth:      (user: User, token: string) => void
   updateUser:   (user: Partial<User>) => void
+  clearAuth:    () => void
   logout:       () => void
 }
 
@@ -38,9 +39,17 @@ export const useAuthStore = create<AuthStore>()(
           user: state.user ? { ...state.user, ...updates } : null,
         })),
 
+      clearAuth: () => {
+        localStorage.removeItem('accessToken')
+        localStorage.removeItem('refreshToken')
+        localStorage.removeItem('auth-storage')
+        set({ user: null, accessToken: null, isLoggedIn: false })
+      },
+
       logout: () => {
         localStorage.removeItem('accessToken')
         localStorage.removeItem('refreshToken')
+        localStorage.removeItem('auth-storage')
         set({ user: null, accessToken: null, isLoggedIn: false })
       },
     }),
