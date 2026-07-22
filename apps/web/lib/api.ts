@@ -96,6 +96,73 @@ export function getApplicationStats() {
   return api.get('/api/applications/stats').then(response => response.data)
 }
 
+export function getApplicationPackages(params: { status?: string; verification_status?: string } = {}) {
+  return api.get('/api/application-packages', { params }).then(response => response.data)
+}
+
+export function getApplicationPackageStats() {
+  return api.get('/api/application-packages/stats').then(response => response.data)
+}
+
+export function getApplicationPackage(id: string) {
+  return api.get(`/api/application-packages/${encodeURIComponent(id)}`).then(response => response.data)
+}
+
+export function queueApplicationPackage(payload: Record<string, unknown>) {
+  return api.post('/api/application-packages/queue', payload).then(response => response.data)
+}
+
+export function updateApplicationPackageStatus(id: string, payload: Record<string, unknown>) {
+  return api.patch(`/api/application-packages/${encodeURIComponent(id)}/status`, payload).then(response => response.data)
+}
+
+export function verifyApplicationPackage(id: string, payload: Record<string, unknown>) {
+  return api.patch(`/api/application-packages/${encodeURIComponent(id)}/verification`, payload).then(response => response.data)
+}
+
+export function attachApplicationPackageDocument(id: string, payload: { document_id: string; purpose: string }) {
+  return api.post(`/api/application-packages/${encodeURIComponent(id)}/documents`, payload).then(response => response.data)
+}
+
+export function addApplicationPackageContact(id: string, payload: Record<string, unknown>) {
+  return api.post(`/api/application-packages/${encodeURIComponent(id)}/contacts`, payload).then(response => response.data)
+}
+
+export function addApplicationPackageOutreach(id: string, payload: Record<string, unknown>) {
+  return api.post(`/api/application-packages/${encodeURIComponent(id)}/outreach`, payload).then(response => response.data)
+}
+
+export function getCandidateDocuments(params: { kind?: string; resume_family?: string } = {}) {
+  return api.get('/api/documents', { params }).then(response => response.data)
+}
+
+export function uploadCandidateDocument(file: File, metadata: {
+  name: string
+  kind: string
+  resume_family?: string
+  is_master?: boolean
+}) {
+  return api.post('/api/documents/upload', file, {
+    params: {
+      ...metadata,
+      file_name: file.name,
+    },
+    headers: { 'Content-Type': file.type || 'application/octet-stream' },
+  }).then(response => response.data)
+}
+
+export function updateCandidateDocument(id: string, payload: Record<string, unknown>) {
+  return api.patch(`/api/documents/${encodeURIComponent(id)}`, payload).then(response => response.data)
+}
+
+export function deleteCandidateDocument(id: string) {
+  return api.delete(`/api/documents/${encodeURIComponent(id)}`).then(response => response.data)
+}
+
+export function downloadCandidateDocument(id: string) {
+  return api.get(`/api/documents/${encodeURIComponent(id)}/download`, { responseType: 'blob' })
+}
+
 export function getSavedSearches() {
   return api.get('/api/saved-searches').then(response => response.data)
 }
