@@ -4,7 +4,6 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { toast } from 'sonner'
-import api from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
 
 function Particles() {
@@ -67,13 +66,20 @@ export default function RegisterPage() {
     if (password.length < 8) { toast.error('Password must be at least 8 characters'); return }
     setLoading(true)
     try {
-      const res = await api.post('/auth/register', { name, email, password })
-      setAuth(res.data.user, res.data.accessToken)
-      localStorage.setItem('refreshToken', res.data.refreshToken)
+      const response = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, email, password }),
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(data?.error || 'Registration failed')
+      }
+      setAuth(data.user, data.accessToken)
       toast.success('Account created! Welcome 🎉')
-      router.push('/dashboard')
+      router.replace('/dashboard')
     } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Registration failed')
+      toast.error(err?.message || 'Registration failed')
     } finally {
       setLoading(false)
     }

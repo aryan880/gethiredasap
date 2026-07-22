@@ -13,8 +13,11 @@ Endpoints:
     GET  /health       → health check
 """
 
+import os
 from fastapi import FastAPI, HTTPException
+from fastapi import Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 from dotenv import load_dotenv
@@ -28,6 +31,21 @@ from scorer import (
 
 load_dotenv()
 
+
+def parse_allowed_origins() -> list[str]:
+    raw = os.getenv("NLP_ALLOWED_ORIGINS", "http://localhost:3001")
+    return [origin.strip() for origin in raw.split(",") if origin.strip()]
+
+
+def required_api_key() -> str:
+    value = os.getenv("NLP_API_KEY", "")
+    if len(value) < 24:
+        raise RuntimeError("NLP_API_KEY must be set to a strong shared secret")
+    return value
+
+
+INTERNAL_API_KEY = required_api_key()
+
 app = FastAPI(
     title="GetHiredASAP NLP Service",
     description="Job matching NLP microservice",
@@ -37,10 +55,21 @@ app = FastAPI(
 # Allow Node.js API to call this service
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3001"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=parse_allowed_origins(),
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type", "X-Internal-Api-Key"],
 )
+
+
+@app.middleware("http")
+async def require_internal_api_key(request: Request, call_next):
+    header_value = request.headers.get("x-internal-api-key", "")
+    if header_value != INTERNAL_API_KEY:
+        return JSONResponse(
+            status_code=401,
+            content={"detail": "Unauthorized internal request"},
+        )
+    return await call_next(request)
 
 
 # ── REQUEST / RESPONSE MODELS ──

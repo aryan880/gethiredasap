@@ -8,6 +8,7 @@ export interface AuthRequest extends Request {
     userId: string
     email: string
     tier: string
+    isAdmin?: boolean
   }
 }
 

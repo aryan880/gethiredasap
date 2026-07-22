@@ -9,10 +9,13 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
 
 const router = Router()
 
+const PRO_PRICE_ID = process.env.STRIPE_PRO_PRICE_ID || 'price_local_pro'
+const PREMIUM_PRICE_ID = process.env.STRIPE_PREMIUM_PRICE_ID || 'price_local_premium'
+
 // ── TIER CONFIG ──
 const TIER_MAP: Record<string, 'PRO' | 'PREMIUM'> = {
-  [process.env.STRIPE_PRO_PRICE_ID     || '']: 'PRO',
-  [process.env.STRIPE_PREMIUM_PRICE_ID || '']: 'PREMIUM',
+  [PRO_PRICE_ID]:     'PRO',
+  [PREMIUM_PRICE_ID]: 'PREMIUM',
 }
 
 // ── GENERATE INVITE CODE ──
@@ -172,7 +175,7 @@ router.get('/prices', async (req: Request, res: Response) => {
     res.json({
       prices: [
         {
-          id:       process.env.STRIPE_PRO_PRICE_ID,
+          id:       PRO_PRICE_ID,
           tier:     'PRO',
           name:     'GetHiredASAP Pro',
           amount:   900,   // cents
@@ -188,7 +191,7 @@ router.get('/prices', async (req: Request, res: Response) => {
           ],
         },
         {
-          id:       process.env.STRIPE_PREMIUM_PRICE_ID,
+          id:       PREMIUM_PRICE_ID,
           tier:     'PREMIUM',
           name:     'GetHiredASAP Premium',
           amount:   1900,  // cents
