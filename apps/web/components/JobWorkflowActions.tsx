@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import type { CSSProperties } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { jobHunterQueryKeys, updateApplicationStatus } from '@/lib/api'
+import { jobHunterQueryKeys, queueApplicationPackage, updateApplicationStatus } from '@/lib/api'
 
 type WorkflowStatus = 'NEW' | 'SAVED' | 'APPLIED' | 'INTERVIEW' | 'OFFER' | 'REJECTED'
 
@@ -93,6 +93,39 @@ export default function JobWorkflowActions({ job, workflow }: { job: any; workfl
     },
   })
 
+  const packageMutation = useMutation({
+    mutationFn: () => queueApplicationPackage({
+      source: job.source || 'ai_job_hunter',
+      external_job_id: job.id,
+      title: job.title,
+      company: job.company,
+      location: job.location,
+      job_url: job.link,
+      application_url: job.application_url || job.apply_url,
+      canonical_employer_url: job.canonical_employer_url,
+      source_native_id: job.source_native_id || job.ats_posting_id,
+      requisition_id: job.requisition_id,
+      url_provenance: job.url_provenance || 'UNKNOWN',
+      application_url_verified_at: job.application_url_verified_at,
+      source_metadata: job.source_metadata,
+      discovered_by: 'AI_JOB_HUNTER',
+      verification_status: job.verification_status || 'UNVERIFIED',
+      verification_evidence: job.verification_evidence,
+      published_at: job.posted_at || job.postedAt,
+      first_seen_at: job.first_seen,
+      fit_score: job.score ?? job.match_score,
+      freshness_score: job.freshness_score,
+      score_breakdown: job.score_breakdown,
+      hard_blockers: job.hard_blockers || [],
+      match_evidence: job.match_evidence,
+      role_family: job.role_family || 'GENERAL',
+    }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['application-packages'] })
+      qc.invalidateQueries({ queryKey: ['application-package-stats'] })
+    },
+  })
+
   return (
     <div style={{
       marginTop: '12px',
@@ -101,6 +134,23 @@ export default function JobWorkflowActions({ job, workflow }: { job: any; workfl
     }}>
       <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center', marginBottom: '10px' }}>
         <StatusBadge workflow={workflow} />
+        <button
+          onClick={() => packageMutation.mutate()}
+          disabled={packageMutation.isPending}
+          style={{
+            border: '1px solid rgba(167,139,250,0.35)',
+            background: 'rgba(167,139,250,0.10)',
+            color: '#C4B5FD',
+            borderRadius: '8px',
+            padding: '6px 10px',
+            fontFamily: 'DM Sans, sans-serif',
+            fontSize: '12px',
+            fontWeight: 700,
+            cursor: packageMutation.isPending ? 'wait' : 'pointer',
+          }}
+        >
+          {packageMutation.isPending ? 'Queuing...' : 'Prepare package'}
+        </button>
         {QUICK_ACTIONS.map(action => (
           <button
             key={action.status}
@@ -123,6 +173,17 @@ export default function JobWorkflowActions({ job, workflow }: { job: any; workfl
           </button>
         ))}
       </div>
+
+      {packageMutation.isSuccess && (
+        <div style={{ color: 'var(--accent)', fontSize: '12px', marginBottom: '10px' }}>
+          Added to Application Studio for verification and package preparation.
+        </div>
+      )}
+      {packageMutation.isError && (
+        <div style={{ color: '#FCA5A5', fontSize: '12px', marginBottom: '10px' }}>
+          {(packageMutation.error as any)?.response?.data?.error || 'Unable to prepare application package.'}
+        </div>
+      )}
 
       <details>
         <summary style={{

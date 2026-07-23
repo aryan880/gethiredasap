@@ -69,7 +69,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { href: '/top',       label: 'Top',      icon: '◆' },
     { href: '/job-hunter', label: 'Hunter',  icon: '✦' },
     { href: '/saved-searches', label: 'Searches', icon: '⌕' },
-    { href: '/pricing',   label: 'Pricing',  icon: '◇' },
+    { href: '/application-studio', label: 'Studio', icon: '◇' },
     { href: '/settings',  label: 'Settings', icon: '◉' },
   ]
 

@@ -83,6 +83,8 @@ app.use('/api/job-hunter/command-center', jobHunterRateLimit, lazyRouter(() => r
 app.use('/api/job-hunter', jobHunterRateLimit, lazyRouter(() => require('./routes/jobHunter')))
 app.use('/api/saved-searches', writeRateLimit, lazyRouter(() => require('./routes/savedSearches')))
 app.use('/api/applications', writeRateLimit, lazyRouter(() => require('./routes/applications')))
+app.use('/api/documents', jobHunterRateLimit, lazyRouter(() => require('./routes/documents')))
+app.use('/api/application-packages', jobHunterRateLimit, lazyRouter(() => require('./routes/applicationPackages')))
 
 // add after app.use('/jobs', jobRoutes)
 app.use('/stripe', lazyRouter(() => require('./routes/stripe')))
