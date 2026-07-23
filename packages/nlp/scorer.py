@@ -11,20 +11,24 @@ Scoring approach:
   Score range: 0-100
 """
 
+import os
 import re
 from typing import List, Dict, Tuple, Optional
 
 # Try to load sentence-transformers for semantic matching
 # Falls back to TF-IDF if not installed
+_st_model = None
 try:
     from sentence_transformers import SentenceTransformer
     import numpy as np
-    _st_model = SentenceTransformer("all-MiniLM-L6-v2")
+    model_name = os.getenv("NLP_MODEL_NAME", "all-MiniLM-L6-v2")
+    local_only = os.getenv("NLP_MODEL_LOCAL_ONLY", "true").lower() not in {"0", "false", "no"}
+    _st_model = SentenceTransformer(model_name, local_files_only=local_only)
     USE_SEMANTIC = True
     print("✅ sentence-transformers loaded — semantic matching active")
-except ImportError:
+except Exception as exc:
     USE_SEMANTIC = False
-    print("⚠️  sentence-transformers not installed — using TF-IDF")
+    print(f"⚠️  semantic model unavailable ({type(exc).__name__}) — using TF-IDF")
 
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
@@ -72,7 +76,11 @@ def build_vectorizer(resume_text: str):
       model_type is either "semantic" or a TfidfVectorizer instance
     """
     if USE_SEMANTIC:
-        embedding = _st_model.encode(resume_text, convert_to_numpy=True)
+        embedding = _st_model.encode(
+            resume_text,
+            convert_to_numpy=True,
+            normalize_embeddings=True,
+        )
         return "semantic", embedding
     else:
         cleaned = clean_text(resume_text)
@@ -215,7 +223,7 @@ def get_score_label(score: float) -> str:
 def score_jobs_batch(
     jobs: List[Dict],
     resume_text: str,
-    candidate_years: float = 1.5,
+    candidate_years: Optional[float] = None,
 ) -> List[Dict]:
     """
     Score a list of jobs against a resume.
@@ -236,23 +244,57 @@ def score_jobs_batch(
     # Build vectorizer once for all jobs
     vectorizer, resume_vector = build_vectorizer(resume_text)
 
-    scored_jobs = []
-
-    for job in jobs:
-        # Build full text to score against
-        full_text = " ".join([
+    full_texts = [
+        " ".join([
             job.get("title", ""),
             job.get("company", ""),
             job.get("location", ""),
             job.get("description", ""),
         ])
+        for job in jobs
+    ]
 
-        # Base NLP score
-        base_score, breakdown = score_job(full_text, vectorizer, resume_vector)
+    semantic_scores = None
+    if USE_SEMANTIC and vectorizer == "semantic" and _st_model is not None:
+        job_embeddings = _st_model.encode(
+            full_texts,
+            convert_to_numpy=True,
+            batch_size=32,
+            show_progress_bar=False,
+            normalize_embeddings=True,
+        )
+        with np.errstate(over="ignore", invalid="ignore", divide="ignore"):
+            raw_similarities = job_embeddings @ resume_vector
+        similarities = np.nan_to_num(
+            raw_similarities,
+            nan=0.0,
+            posinf=0.0,
+            neginf=0.0,
+        )
+        semantic_scores = [
+            min(max(round((float(raw) - 0.1) * 125, 1), 0), 100)
+            for raw in similarities
+        ]
+
+    scored_jobs = []
+
+    for index, job in enumerate(jobs):
+        full_text = full_texts[index]
+        if semantic_scores is not None:
+            base_score = semantic_scores[index]
+            breakdown = {
+                "early": any(term in full_text.lower() for term in EARLY_CAREER_TERMS),
+                "method": "semantic",
+            }
+        else:
+            base_score, breakdown = score_job(full_text, vectorizer, resume_vector)
 
         # Experience adjustment
         required = extract_experience_required(job.get("description", ""))
-        adj, exp_label = experience_adjustment(required, candidate_years)
+        if candidate_years is None:
+            adj, exp_label = 0.0, ""
+        else:
+            adj, exp_label = experience_adjustment(required, candidate_years)
 
         # Final score
         final = min(max(round(base_score + adj, 1), 0), 100)

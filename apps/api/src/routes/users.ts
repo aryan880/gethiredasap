@@ -1,6 +1,8 @@
 import { Router, Response } from 'express'
 import prisma from '../config/database'
 import { authenticate, AuthRequest } from '../middleware/auth'
+import { cleanString } from '../middleware/security'
+import { clearPersonalizedMatchesCache } from '../services/jobHunterService'
 
 const router = Router()
 
@@ -56,11 +58,15 @@ router.get('/me', async (req: AuthRequest, res: Response) => {
 // Update name, threshold, interval, or active status
 router.put('/me', async (req: AuthRequest, res: Response) => {
   try {
-    const { name, threshold, intervalMinutes, isActive } = req.body
+    const name = req.body.name === undefined ? undefined : cleanString(req.body.name, 80)
+    const threshold = req.body.threshold
+    const intervalMinutes = req.body.intervalMinutes
+    const isActive = req.body.isActive
 
     // Validate threshold if provided
     if (threshold !== undefined) {
-      if (threshold < 5 || threshold > 80) {
+      const numericThreshold = Number(threshold)
+      if (!Number.isFinite(numericThreshold) || numericThreshold < 5 || numericThreshold > 80) {
         res.status(400).json({ error: 'Threshold must be between 5 and 80' })
         return
       }
@@ -68,10 +74,16 @@ router.put('/me', async (req: AuthRequest, res: Response) => {
 
     // Validate interval if provided
     if (intervalMinutes !== undefined) {
-      if (intervalMinutes < 5 || intervalMinutes > 60) {
+      const numericInterval = Number(intervalMinutes)
+      if (!Number.isFinite(numericInterval) || numericInterval < 5 || numericInterval > 60) {
         res.status(400).json({ error: 'Interval must be between 5 and 60 minutes' })
         return
       }
+    }
+
+    if (isActive !== undefined && typeof isActive !== 'boolean') {
+      res.status(400).json({ error: 'isActive must be boolean' })
+      return
     }
 
     // Only update fields that were actually sent
@@ -107,7 +119,7 @@ router.put('/me', async (req: AuthRequest, res: Response) => {
 // Saves the user's resume text for NLP job matching
 router.post('/resume', async (req: AuthRequest, res: Response) => {
   try {
-    const { resumeText } = req.body
+    const resumeText = typeof req.body.resumeText === 'string' ? req.body.resumeText.trim() : ''
 
     if (!resumeText) {
       res.status(400).json({ error: 'Resume text is required' })
@@ -121,10 +133,17 @@ router.post('/resume', async (req: AuthRequest, res: Response) => {
       return
     }
 
+    if (resumeText.length > 100_000) {
+      res.status(400).json({ error: 'Resume text is too long' })
+      return
+    }
+
     await prisma.user.update({
       where: { id: req.user!.userId },
       data: { resumeText },
     })
+
+    clearPersonalizedMatchesCache(req.user!.userId)
 
     res.json({
       message: 'Resume saved successfully',
@@ -161,14 +180,15 @@ router.get('/searches', async (req: AuthRequest, res: Response) => {
 // Adds a new role + location combination to search
 router.post('/searches', async (req: AuthRequest, res: Response) => {
   try {
-    const { role, location } = req.body
+    const role = cleanString(req.body.role, 120)
+    const location = cleanString(req.body.location, 120)
 
     if (!role || !location) {
       res.status(400).json({ error: 'Role and location are required' })
       return
     }
 
-    if (role.length < 2) {
+    if (role.length < 2 || location.length < 2) {
       res.status(400).json({ error: 'Role must be at least 2 characters' })
       return
     }
@@ -195,6 +215,8 @@ router.post('/searches', async (req: AuthRequest, res: Response) => {
         location: location.trim(),
       },
     })
+
+    clearPersonalizedMatchesCache(req.user!.userId)
 
     res.status(201).json({ message: 'Search added successfully', search })
   } catch (error) {
@@ -228,6 +250,8 @@ router.delete('/searches/:id', async (req: AuthRequest, res: Response) => {
       where: { id: String(req.params.id) },
       data: { isActive: false },
     })
+
+    clearPersonalizedMatchesCache(req.user!.userId)
 
     res.json({ message: 'Search removed successfully' })
   } catch (error) {

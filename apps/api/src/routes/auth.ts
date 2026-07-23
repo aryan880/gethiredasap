@@ -7,15 +7,23 @@ import {
   verifyRefreshToken,
 } from '../utils/jwt'
 import { authenticate, AuthRequest } from '../middleware/auth'
+import {
+  authAttemptRateLimit,
+  authRefreshRateLimit,
+  cleanString,
+  isEmail,
+} from '../middleware/security'
 
 const router = Router()
 
 // ── REGISTER ──
 // POST /auth/register
 // Creates a new user account
-router.post('/register', async (req: Request, res: Response) => {
+router.post('/register', authAttemptRateLimit, async (req: Request, res: Response) => {
   try {
-    const { email, password, name } = req.body
+    const email = cleanString(req.body.email, 254).toLowerCase()
+    const password = typeof req.body.password === 'string' ? req.body.password : ''
+    const name = cleanString(req.body.name, 80)
 
     // Validate input
     if (!email || !password || !name) {
@@ -23,8 +31,13 @@ router.post('/register', async (req: Request, res: Response) => {
       return
     }
 
-    if (password.length < 8) {
-      res.status(400).json({ error: 'Password must be at least 8 characters' })
+    if (!isEmail(email)) {
+      res.status(400).json({ error: 'Invalid email address' })
+      return
+    }
+
+    if (password.length < 8 || password.length > 128) {
+      res.status(400).json({ error: 'Password must be between 8 and 128 characters' })
       return
     }
 
@@ -57,6 +70,7 @@ router.post('/register', async (req: Request, res: Response) => {
         threshold: true,
         intervalMinutes: true,
         isActive: true,
+        isAdmin: true,
         resumeText: true,
         createdAt: true,
       },
@@ -67,12 +81,14 @@ router.post('/register', async (req: Request, res: Response) => {
       userId: user.id,
       email: user.email,
       tier: user.tier,
+      isAdmin: user.isAdmin,
     })
 
     const refreshToken = generateRefreshToken({
       userId: user.id,
       email: user.email,
       tier: user.tier,
+      isAdmin: user.isAdmin,
     })
 
     res.status(201).json({
@@ -90,11 +106,12 @@ router.post('/register', async (req: Request, res: Response) => {
 // ── LOGIN ──
 // POST /auth/login
 // Authenticates user and returns tokens
-router.post('/login', async (req: Request, res: Response) => {
+router.post('/login', authAttemptRateLimit, async (req: Request, res: Response) => {
   try {
-    const { email, password } = req.body
+    const email = cleanString(req.body.email, 254).toLowerCase()
+    const password = typeof req.body.password === 'string' ? req.body.password : ''
 
-    if (!email || !password) {
+    if (!email || !password || !isEmail(email) || password.length > 128) {
       res.status(400).json({ error: 'Email and password are required' })
       return
     }
@@ -120,12 +137,14 @@ router.post('/login', async (req: Request, res: Response) => {
       userId: user.id,
       email: user.email,
       tier: user.tier,
+      isAdmin: user.isAdmin,
     })
 
     const refreshToken = generateRefreshToken({
       userId: user.id,
       email: user.email,
       tier: user.tier,
+      isAdmin: user.isAdmin,
     })
 
     res.json({
@@ -139,6 +158,7 @@ router.post('/login', async (req: Request, res: Response) => {
         threshold: user.threshold,
         intervalMinutes: user.intervalMinutes,
         isActive: user.isActive,
+        isAdmin: user.isAdmin,
         resumeText: user.resumeText,
         createdAt: user.createdAt,
       },
@@ -154,11 +174,11 @@ router.post('/login', async (req: Request, res: Response) => {
 // ── REFRESH TOKEN ──
 // POST /auth/refresh
 // Gets a new access token using a refresh token
-router.post('/refresh', async (req: Request, res: Response) => {
+router.post('/refresh', authRefreshRateLimit, async (req: Request, res: Response) => {
   try {
-    const { refreshToken } = req.body
+    const refreshToken = typeof req.body.refreshToken === 'string' ? req.body.refreshToken : ''
 
-    if (!refreshToken) {
+    if (!refreshToken || refreshToken.length > 4096) {
       res.status(400).json({ error: 'Refresh token required' })
       return
     }
@@ -181,6 +201,7 @@ router.post('/refresh', async (req: Request, res: Response) => {
       userId: user.id,
       email: user.email,
       tier: user.tier,
+      isAdmin: user.isAdmin,
     })
 
     res.json({ accessToken })
@@ -206,6 +227,7 @@ router.get('/me', authenticate, async (req: AuthRequest, res: Response) => {
         threshold: true,
         intervalMinutes: true,
         isActive: true,
+        isAdmin: true,
         resumeText: true,
         createdAt: true,
       },

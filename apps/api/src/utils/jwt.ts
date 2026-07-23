@@ -1,13 +1,22 @@
 import jwt from 'jsonwebtoken'
 
-const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret'
-const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'fallback-refresh'
+function requiredSecret(name: 'JWT_SECRET' | 'JWT_REFRESH_SECRET') {
+  const value = process.env[name]
+  if (!value || value.length < 32 || value.startsWith('change-me') || value.startsWith('fallback')) {
+    throw new Error(`${name} must be set to a strong environment secret`)
+  }
+  return value
+}
+
+const JWT_SECRET = requiredSecret('JWT_SECRET')
+const JWT_REFRESH_SECRET = requiredSecret('JWT_REFRESH_SECRET')
 
 // What we store inside the token
 export interface TokenPayload {
   userId: string
   email: string
   tier: string
+  isAdmin?: boolean
 }
 
 // Create a short-lived access token (15 minutes)

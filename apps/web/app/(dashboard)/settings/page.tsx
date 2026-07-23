@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { useAuthStore } from '@/lib/store'
-import api from '@/lib/api'
+import api, { jobHunterQueryKeys } from '@/lib/api'
 
 // ── REUSABLE INPUT ──
 function Field({ label, hint, children }: { label:string; hint?:string; children:React.ReactNode }) {
@@ -50,6 +50,7 @@ function Section({ icon, tag, title, desc, children, delay='0s' }: any) {
 
 // ── RESUME ──
 function ResumeSection() {
+  const qc = useQueryClient()
   const { user, updateUser } = useAuthStore()
   const [text, setText] = useState(user?.resumeText || '')
   const [saving, setSaving] = useState(false)
@@ -57,7 +58,12 @@ function ResumeSection() {
 
   async function save() {
     setSaving(true)
-    try { await api.post('/users/resume',{resumeText:text}); updateUser({resumeText:text}); toast.success('Resume saved ✓') }
+    try {
+      await api.post('/users/resume', { resumeText: text })
+      updateUser({ resumeText: text })
+      qc.invalidateQueries({ queryKey: jobHunterQueryKeys.personalizedMatchesRoot })
+      toast.success('Resume saved ✓')
+    }
     catch(err:any){ toast.error(err.response?.data?.error||'Failed to save') }
     finally{ setSaving(false) }
   }

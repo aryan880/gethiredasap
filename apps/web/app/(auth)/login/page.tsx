@@ -4,7 +4,6 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { toast } from 'sonner'
-import api from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
 
 function Particles() {
@@ -61,17 +60,32 @@ export default function LoginPage() {
   const [loading,  setLoading]  = useState(false)
   const [focused,  setFocused]  = useState<string | null>(null)
 
+  useEffect(() => {
+    router.prefetch('/dashboard')
+  }, [router])
+
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
     try {
-      const res = await api.post('/auth/login', { email, password })
-      setAuth(res.data.user, res.data.accessToken)
-      localStorage.setItem('refreshToken', res.data.refreshToken)
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(data?.error || 'Invalid credentials')
+      }
+      setAuth(data.user, data.accessToken)
       toast.success('Welcome back')
-      router.push('/dashboard')
+      const requestedPath = new URLSearchParams(window.location.search).get('next')
+      const destination = requestedPath?.startsWith('/') && !requestedPath.startsWith('//')
+        ? requestedPath
+        : '/dashboard'
+      router.replace(destination)
     } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Invalid credentials')
+      toast.error(err?.message || 'Invalid credentials')
     } finally {
       setLoading(false)
     }
