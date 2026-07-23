@@ -658,7 +658,7 @@ function MatchCard({ match, index }: { match: any; index: number }) {
 export default function JobHunterPage() {
   const user = useAuthStore(s => s.user)
   const qc = useQueryClient()
-  const isPersonalized = Boolean(user?.resumeText?.trim())
+  const isPersonalized = Boolean(user?.resumeText?.trim() || user?.activeResumeFamily)
   const [activeTab, setActiveTab] = useState<'global' | 'personalized'>('global')
   const [saveDialogOpen, setSaveDialogOpen] = useState(false)
   const [saveError, setSaveError] = useState('')

@@ -230,7 +230,7 @@ function normalizeItems(data: any, isPersonalized: boolean) {
 
 export default function TopPage() {
   const user = useAuthStore(state => state.user)
-  const isPersonalized = Boolean(user?.resumeText?.trim())
+  const isPersonalized = Boolean(user?.resumeText?.trim() || user?.activeResumeFamily)
 
   const { data, isLoading, isError } = useQuery({
     queryKey: isPersonalized

@@ -113,6 +113,7 @@ model User {
   updatedAt             DateTime               @updatedAt
   resumeText            String?
   resumeUrl             String?
+  activeResumeFamily    ResumeFamily?
   threshold             Int                    @default(15)
   intervalMinutes       Int                    @default(15)
   isActive              Boolean                @default(true)
@@ -138,25 +139,32 @@ model User {
 }
 
 model CandidateDocument {
-  id            String                       @id @default(cuid())
-  userId        String
-  name          String
-  fileName      String
-  mimeType      String
-  kind          CandidateDocumentKind
-  resumeFamily  ResumeFamily?
-  byteSize      Int
-  sha256        String
-  ciphertext    Bytes
-  iv            Bytes
-  authTag       Bytes
-  isMaster      Boolean                      @default(false)
-  libraryFileId String?
-  libraryPath   String?
-  createdAt     DateTime                     @default(now())
-  updatedAt     DateTime                     @updatedAt
-  user          User                         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  packageLinks  ApplicationPackageDocument[]
+  id                  String                       @id @default(cuid())
+  userId              String
+  name                String
+  fileName            String
+  mimeType            String
+  kind                CandidateDocumentKind
+  resumeFamily        ResumeFamily?
+  byteSize            Int
+  sha256              String
+  ciphertext          Bytes
+  iv                  Bytes
+  authTag             Bytes
+  textCiphertext      Bytes?
+  textIv              Bytes?
+  textAuthTag         Bytes?
+  textSha256          String?
+  textLength          Int?
+  textExtractedAt     DateTime?
+  textExtractionError String?
+  isMaster            Boolean                      @default(false)
+  libraryFileId       String?
+  libraryPath         String?
+  createdAt           DateTime                     @default(now())
+  updatedAt           DateTime                     @updatedAt
+  user                User                         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  packageLinks        ApplicationPackageDocument[]
 
   @@index([userId, kind, isMaster])
   @@index([userId, resumeFamily])

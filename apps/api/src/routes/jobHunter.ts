@@ -12,6 +12,7 @@ import {
 } from '../services/jobHunterService'
 import prisma from '../config/database'
 import { authenticate, AuthRequest } from '../middleware/auth'
+import { getCandidateMatchingProfile } from '../services/candidateProfileService'
 
 const router = Router()
 
@@ -188,45 +189,18 @@ router.post('/refresh-sources', async (req: AuthRequest, res) => {
   }
 })
 
-function profileSearches(user: any) {
-  const savedSearchRoles = (user.savedSearches || []).flatMap((search: any) =>
-    String(search.keywords || '')
-      .split(/[\n,]/)
-      .map((role: string) => role.trim())
-      .filter(Boolean)
-      .map((role: string) => ({ role, location: String(search.location || '') }))
-  )
-  return [...(user.searches || []), ...savedSearchRoles]
-}
-
 router.get('/matches', async (req: AuthRequest, res) => {
   const start = startedAt()
   try {
-    const user = await prisma.user.findUnique({
-      where: { id: req.user!.userId },
-      select: {
-        resumeText: true,
-        searches: {
-          where: { isActive: true },
-          select: {
-            role: true,
-            location: true,
-          },
-        },
-        savedSearches: {
-          where: { enabled: true },
-          select: { keywords: true, location: true },
-        },
-      },
-    })
+    const { resume_family: resumeFamily, ...jobQuery } = req.query
+    const candidate = await getCandidateMatchingProfile(req.user!.userId, resumeFamily)
 
-    if (!user) {
+    if (!candidate) {
       res.status(404).json({ error: 'User not found' })
       return
     }
 
-    const profile = { resumeText: user.resumeText, searches: profileSearches(user) }
-    const data = await getJobHunterMatches(req.query as JobHunterJobsQuery, profile, req.user!.userId)
+    const data = await getJobHunterMatches(jobQuery as JobHunterJobsQuery, candidate.profile, req.user!.userId)
     const response = await enrichMatchesResponse(data, req.user!.userId)
     logTiming('job-hunter.matches', start, {
       total: response?.total ?? response?.items?.length ?? 0,
@@ -234,7 +208,7 @@ router.get('/matches', async (req: AuthRequest, res) => {
       limit: response?.limit ?? null,
       scoring_method: response?.scoring_method ?? null,
     })
-    res.json(response)
+    res.json({ ...response, resume_profile: candidate.selection })
   } catch (error) {
     logTiming('job-hunter.matches.error', start)
     handleProxyError(error, res)
@@ -243,33 +217,15 @@ router.get('/matches', async (req: AuthRequest, res) => {
 
 router.get('/jobs/:id/resume-gap', async (req: AuthRequest, res) => {
   try {
-    const user = await prisma.user.findUnique({
-      where: { id: req.user!.userId },
-      select: {
-        resumeText: true,
-        searches: {
-          where: { isActive: true },
-          select: {
-            role: true,
-            location: true,
-          },
-        },
-        savedSearches: {
-          where: { enabled: true },
-          select: { keywords: true, location: true },
-        },
-      },
-    })
+    const candidate = await getCandidateMatchingProfile(req.user!.userId, req.query.resume_family)
 
-    if (!user) {
+    if (!candidate) {
       res.status(404).json({ error: 'User not found' })
       return
     }
 
-    res.json(await analyzeResumeGap(String(req.params.id), {
-      resumeText: user.resumeText,
-      searches: profileSearches(user),
-    }))
+    const analysis = await analyzeResumeGap(String(req.params.id), candidate.profile)
+    res.json({ ...analysis, resume_profile: candidate.selection })
   } catch (error) {
     handleProxyError(error, res)
   }

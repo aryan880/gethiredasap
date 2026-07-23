@@ -25,6 +25,7 @@ import {
   getApplicationPackages,
   getApplicationPackageStats,
   getCandidateDocuments,
+  setActiveResumeFamily,
   updateApplicationPackageStatus,
   uploadCandidateDocument,
 } from '@/lib/api'
@@ -40,6 +41,9 @@ type CandidateDocument = {
   resume_family?: string | null
   byte_size: number
   is_master: boolean
+  text_ready?: boolean
+  text_length?: number | null
+  text_extraction_error?: string | null
   library_file_id?: string | null
   library_path?: string | null
   updated_at: string
@@ -64,6 +68,11 @@ type ApplicationPackage = {
   published_at?: string | null
   first_seen_at?: string | null
   counts?: { documents: number; contacts: number; outreach_drafts: number }
+}
+
+type CandidateDocumentsResponse = {
+  documents: CandidateDocument[]
+  active_resume_family?: ResumeFamily | null
 }
 
 type ApplicationPackageStats = {
@@ -144,7 +153,7 @@ export default function ApplicationStudioPage() {
     queryFn: getApplicationPackageStats,
     staleTime: 30_000,
   })
-  const documentsQuery = useQuery<{ documents: CandidateDocument[] }>({
+  const documentsQuery = useQuery<CandidateDocumentsResponse>({
     queryKey: ['candidate-documents'],
     queryFn: () => getCandidateDocuments(),
     staleTime: 30_000,
@@ -163,6 +172,13 @@ export default function ApplicationStudioPage() {
     mutationFn: deleteCandidateDocument,
     onSuccess: () => qc.invalidateQueries({ queryKey: ['candidate-documents'] }),
   })
+  const activeResumeMutation = useMutation({
+    mutationFn: (family: ResumeFamily) => setActiveResumeFamily(family),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['candidate-documents'] })
+      qc.invalidateQueries({ predicate: query => String(query.queryKey?.[0] || '').startsWith('job-hunter') })
+    },
+  })
   const statusMutation = useMutation({
     mutationFn: ({ id, status }: { id: string; status: string }) => updateApplicationPackageStatus(id, { status }),
     onSuccess: () => {
@@ -172,6 +188,7 @@ export default function ApplicationStudioPage() {
   })
 
   const documents = useMemo(() => documentsQuery.data?.documents || [], [documentsQuery.data?.documents])
+  const activeResumeFamily = documentsQuery.data?.active_resume_family || null
   const packages = packagesQuery.data?.packages || []
   const masters = useMemo(() => new Map(
     documents.filter(document => document.is_master).map(document => [document.resume_family, document]),
@@ -365,10 +382,20 @@ export default function ApplicationStudioPage() {
                     <div style={{ marginTop: '16px', padding: '12px', borderRadius: '12px', background: 'rgba(0,255,136,0.04)', border: '1px solid rgba(0,255,136,0.12)' }}>
                       <div style={{ color: 'var(--text2)', fontWeight: 700, fontSize: '13px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{document.file_name}</div>
                       <div style={{ color: 'var(--muted2)', fontSize: '11px', marginTop: '5px' }}>{formatBytes(document.byte_size)} · updated {formatDate(document.updated_at)}</div>
+                      <div style={{ color: document.text_ready ? '#34D399' : '#F59E0B', fontSize: '11px', marginTop: '5px' }}>
+                        {document.text_ready ? `${document.text_length?.toLocaleString() || ''} characters ready for matching` : document.text_extraction_error || 'Text extraction is not ready'}
+                      </div>
                       <div style={{ display: 'flex', gap: '7px', marginTop: '10px' }}>
                         <button onClick={() => handleDownload(document)} style={{ flex: 1, borderRadius: '9px', padding: '8px', border: '1px solid rgba(0,255,136,0.18)', background: 'rgba(0,255,136,0.07)', color: 'var(--accent)', cursor: 'pointer', display: 'inline-flex', gap: '6px', alignItems: 'center', justifyContent: 'center' }}><Download size={13} /> Download</button>
                         <button onClick={() => deleteMutation.mutate(document.id)} title="Delete" style={{ width: 36, borderRadius: '9px', border: '1px solid rgba(239,68,68,0.18)', background: 'rgba(239,68,68,0.05)', color: '#F87171', cursor: 'pointer' }}><Trash2 size={13} /></button>
                       </div>
+                      <button
+                        onClick={() => activeResumeMutation.mutate(family.value)}
+                        disabled={!document.text_ready || activeResumeMutation.isPending || activeResumeFamily === family.value}
+                        style={{ width: '100%', marginTop: '8px', borderRadius: '9px', padding: '8px', border: '1px solid rgba(96,165,250,0.2)', background: activeResumeFamily === family.value ? 'rgba(0,255,136,0.1)' : 'rgba(96,165,250,0.06)', color: activeResumeFamily === family.value ? 'var(--accent)' : '#93C5FD', cursor: !document.text_ready || activeResumeFamily === family.value ? 'default' : 'pointer', fontWeight: 700 }}
+                      >
+                        {activeResumeFamily === family.value ? 'Used for personalized matching' : 'Use for personalized matching'}
+                      </button>
                     </div>
                   ) : (
                     <div style={{ color: 'var(--muted2)', fontSize: '12px', marginTop: '18px' }}>No master resume uploaded.</div>

@@ -87,6 +87,12 @@ async function buildCommandCenter(userId: string) {
         updatedAt: true,
         resumeText: true,
         resumeUrl: true,
+        documents: {
+          where: { kind: 'MASTER_RESUME', isMaster: true },
+          orderBy: { updatedAt: 'desc' },
+          take: 3,
+          select: { id: true, name: true, resumeFamily: true, updatedAt: true, textExtractedAt: true },
+        },
         searches: {
           where: { isActive: true },
           select: { role: true, location: true },
@@ -207,14 +213,21 @@ async function buildCommandCenter(userId: string) {
         timestamp: application.appliedDate || application.lastUpdated,
         link: application.jobUrl,
       })),
-      resume_uploads: user?.resumeText?.trim()
-        ? [{
+      resume_uploads: user?.documents?.length
+        ? user.documents.map(document => ({
+            id: document.id,
+            label: `${String(document.resumeFamily || 'General').replace(/_/g, ' ')} resume updated`,
+            detail: document.textExtractedAt ? 'Encrypted resume ready for matching' : 'Resume stored; text extraction needs attention',
+            timestamp: document.updatedAt,
+          }))
+        : user?.resumeText?.trim()
+          ? [{
             id: `resume-${user.id}`,
             label: 'Resume profile updated',
             detail: user.resumeUrl ? 'Uploaded resume on file' : 'Resume text saved in profile',
             timestamp: user.updatedAt,
           }]
-        : [],
+          : [],
     },
   }
 }

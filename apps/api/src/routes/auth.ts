@@ -72,6 +72,7 @@ router.post('/register', authAttemptRateLimit, async (req: Request, res: Respons
         isActive: true,
         isAdmin: true,
         resumeText: true,
+        activeResumeFamily: true,
         createdAt: true,
       },
     })
@@ -229,6 +230,7 @@ router.get('/me', authenticate, async (req: AuthRequest, res: Response) => {
         isActive: true,
         isAdmin: true,
         resumeText: true,
+        activeResumeFamily: true,
         createdAt: true,
       },
     })

@@ -3,6 +3,9 @@ import prisma from '../config/database'
 import { authenticate, AuthRequest } from '../middleware/auth'
 import { cleanString } from '../middleware/security'
 import { decryptDocument, encryptDocument, sha256 } from '../services/documentCrypto'
+import { clearPersonalizedMatchesCache } from '../services/jobHunterService'
+import { candidateResumeFamily } from '../services/candidateProfileService'
+import { extractResumeText } from '../services/resumeTextExtraction'
 
 const router = Router()
 const MAX_DOCUMENT_BYTES = 3 * 1024 * 1024
@@ -51,6 +54,10 @@ function documentResponse(document: any) {
     byte_size: document.byteSize,
     sha256: document.sha256,
     is_master: document.isMaster,
+    text_ready: Boolean(document.textCiphertext && document.textExtractedAt),
+    text_length: document.textLength,
+    text_extracted_at: document.textExtractedAt,
+    text_extraction_error: document.textExtractionError,
     library_file_id: document.libraryFileId,
     library_path: document.libraryPath,
     created_at: document.createdAt,
@@ -62,16 +69,25 @@ router.get('/', async (req: AuthRequest, res: Response) => {
   try {
     const kind = normalizedEnum(req.query.kind, DOCUMENT_KINDS)
     const resumeFamily = normalizedEnum(req.query.resume_family, RESUME_FAMILIES)
-    const documents = await prisma.candidateDocument.findMany({
-      where: {
-        userId: req.user!.userId,
-        ...(kind && { kind: kind as any }),
-        ...(resumeFamily && { resumeFamily: resumeFamily as any }),
-      },
-      orderBy: [{ isMaster: 'desc' }, { updatedAt: 'desc' }],
-    })
+    const [documents, user] = await Promise.all([
+      prisma.candidateDocument.findMany({
+        where: {
+          userId: req.user!.userId,
+          ...(kind && { kind: kind as any }),
+          ...(resumeFamily && { resumeFamily: resumeFamily as any }),
+        },
+        orderBy: [{ isMaster: 'desc' }, { updatedAt: 'desc' }],
+      }),
+      prisma.user.findUnique({
+        where: { id: req.user!.userId },
+        select: { activeResumeFamily: true },
+      }),
+    ])
 
-    res.json({ documents: documents.map(documentResponse) })
+    res.json({
+      documents: documents.map(documentResponse),
+      active_resume_family: user?.activeResumeFamily || null,
+    })
   } catch (error) {
     console.error('List documents error:', error)
     res.status(500).json({ error: 'Unable to load documents' })
@@ -124,6 +140,20 @@ router.post(
       }
 
       const encrypted = encryptDocument(req.body)
+      let encryptedText: ReturnType<typeof encryptDocument> | null = null
+      let textLength: number | null = null
+      let textExtractionError: string | null = null
+
+      if (kind === 'MASTER_RESUME' || kind === 'TAILORED_RESUME') {
+        try {
+          const text = await extractResumeText(req.body, mimeType)
+          encryptedText = encryptDocument(Buffer.from(text, 'utf8'))
+          textLength = text.length
+        } catch (error: any) {
+          textExtractionError = cleanString(error?.message, 300) || 'Resume text extraction failed'
+        }
+      }
+
       const document = await prisma.$transaction(async tx => {
         if (isMaster && resumeFamily) {
           await tx.candidateDocument.updateMany({
@@ -136,7 +166,7 @@ router.post(
           })
         }
 
-        return tx.candidateDocument.create({
+        const created = await tx.candidateDocument.create({
           data: {
             userId: req.user!.userId,
             name,
@@ -149,11 +179,28 @@ router.post(
             ciphertext: encrypted.ciphertext,
             iv: encrypted.iv,
             authTag: encrypted.authTag,
+            textCiphertext: encryptedText?.ciphertext,
+            textIv: encryptedText?.iv,
+            textAuthTag: encryptedText?.authTag,
+            textSha256: encryptedText?.sha256,
+            textLength,
+            textExtractedAt: encryptedText ? new Date() : null,
+            textExtractionError,
             isMaster,
           },
         })
+
+        if (isMaster && resumeFamily && encryptedText) {
+          await tx.user.updateMany({
+            where: { id: req.user!.userId, activeResumeFamily: null },
+            data: { activeResumeFamily: resumeFamily as any },
+          })
+        }
+
+        return created
       })
 
+      clearPersonalizedMatchesCache(req.user!.userId)
       res.status(201).json({ document: documentResponse(document) })
     } catch (error: any) {
       console.error('Upload document error:', error)
@@ -198,6 +245,43 @@ router.get('/:id/download', async (req: AuthRequest, res: Response) => {
     res.status(configurationError ? 503 : 500).json({
       error: configurationError ? 'Document storage is not configured' : 'Unable to download document',
     })
+  }
+})
+
+router.patch('/active-resume', async (req: AuthRequest, res: Response) => {
+  try {
+    const family = req.body.resume_family === null ? null : candidateResumeFamily(req.body.resume_family)
+    if (req.body.resume_family !== null && !family) {
+      res.status(400).json({ error: 'A valid resume family is required' })
+      return
+    }
+
+    if (family) {
+      const readyMaster = await prisma.candidateDocument.findFirst({
+        where: {
+          userId: req.user!.userId,
+          resumeFamily: family as any,
+          kind: 'MASTER_RESUME',
+          isMaster: true,
+          textCiphertext: { not: null },
+        },
+        select: { id: true },
+      })
+      if (!readyMaster) {
+        res.status(409).json({ error: 'Upload a readable master resume for this family first' })
+        return
+      }
+    }
+
+    await prisma.user.update({
+      where: { id: req.user!.userId },
+      data: { activeResumeFamily: family as any },
+    })
+    clearPersonalizedMatchesCache(req.user!.userId)
+    res.json({ active_resume_family: family })
+  } catch (error) {
+    console.error('Set active resume error:', error)
+    res.status(500).json({ error: 'Unable to select resume for matching' })
   }
 })
 
@@ -252,6 +336,7 @@ router.patch('/:id', async (req: AuthRequest, res: Response) => {
       })
     })
 
+    clearPersonalizedMatchesCache(req.user!.userId)
     res.json({ document: documentResponse(document) })
   } catch (error) {
     console.error('Update document error:', error)
@@ -261,15 +346,31 @@ router.patch('/:id', async (req: AuthRequest, res: Response) => {
 
 router.delete('/:id', async (req: AuthRequest, res: Response) => {
   try {
-    const result = await prisma.candidateDocument.deleteMany({
+    const existing = await prisma.candidateDocument.findFirst({
       where: { id: String(req.params.id), userId: req.user!.userId },
+      select: { id: true, resumeFamily: true, isMaster: true },
     })
+    const result = existing
+      ? await prisma.$transaction(async tx => {
+          const deleted = await tx.candidateDocument.deleteMany({
+            where: { id: existing.id, userId: req.user!.userId },
+          })
+          if (existing.isMaster && existing.resumeFamily) {
+            await tx.user.updateMany({
+              where: { id: req.user!.userId, activeResumeFamily: existing.resumeFamily },
+              data: { activeResumeFamily: null },
+            })
+          }
+          return deleted
+        })
+      : { count: 0 }
 
     if (!result.count) {
       res.status(404).json({ error: 'Document not found' })
       return
     }
 
+    clearPersonalizedMatchesCache(req.user!.userId)
     res.status(204).send()
   } catch (error) {
     console.error('Delete document error:', error)

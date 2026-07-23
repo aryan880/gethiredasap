@@ -10,6 +10,7 @@ interface User {
   intervalMinutes:number
   isActive:       boolean
   resumeText:     string | null
+  activeResumeFamily?: string | null
 }
 
 interface AuthStore {
