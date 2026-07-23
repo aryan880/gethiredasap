@@ -27,6 +27,7 @@ router.get('/me', async (req: AuthRequest, res: Response) => {
         intervalMinutes: true,
         isActive: true,
         resumeText: true,
+        activeResumeFamily: true,
         createdAt: true,
         // Also fetch their active job searches in one query
         searches: {

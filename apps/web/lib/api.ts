@@ -136,6 +136,10 @@ export function getCandidateDocuments(params: { kind?: string; resume_family?: s
   return api.get('/api/documents', { params }).then(response => response.data)
 }
 
+export function setActiveResumeFamily(resumeFamily: string | null) {
+  return api.patch('/api/documents/active-resume', { resume_family: resumeFamily }).then(response => response.data)
+}
+
 export function uploadCandidateDocument(file: File, metadata: {
   name: string
   kind: string

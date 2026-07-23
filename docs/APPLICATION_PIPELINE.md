@@ -145,7 +145,10 @@ with private object keys while preserving the document and package APIs.
 
 Master resume families are `SOFTWARE`, `IT_SUPPORT`, `SYSTEMS_ANALYST`,
 `GENERAL`, and `CUSTOM`. Only one document per family is active as the master at
-a time.
+a time. Resume text extracted from PDF, DOCX, Markdown, or text uploads is
+encrypted separately and is never exposed by document-list endpoints. The
+selected active family supplies personalized matching and resume-gap analysis;
+legacy `User.resumeText` remains a fallback for existing accounts.
 
 ## Remaining production work
 
