@@ -1,15 +1,15 @@
 export function authErrorMessage(error: unknown) {
   if (!process.env.DATABASE_URL) {
-    return 'DATABASE_URL is missing in Vercel environment variables'
+    return 'DATABASE_URL is missing from the server environment'
   }
 
   if (error instanceof Error) {
     if (error.message.includes('Environment variable not found: DATABASE_URL')) {
-      return 'DATABASE_URL is missing in Vercel environment variables'
+      return 'DATABASE_URL is missing from the server environment'
     }
 
     if (error.message.includes("Can't reach database server")) {
-      return 'Database server is unreachable from Vercel'
+      return 'Database server is unreachable from the application host'
     }
 
     if (error.message.includes('does not exist in the current database')) {

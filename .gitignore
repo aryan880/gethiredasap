@@ -18,8 +18,8 @@ coverage
 # Turbo
 .turbo
 
-# Vercel
-.vercel
+# Local deployment metadata
+.vercel/
 
 # Build outputs
 .next/

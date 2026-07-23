@@ -8,7 +8,7 @@ export async function GET() {
       return NextResponse.json(
         {
           status: 'error',
-          error: 'DATABASE_URL is missing in Vercel environment variables',
+          error: 'DATABASE_URL is missing from the server environment',
         },
         { status: 500 },
       )

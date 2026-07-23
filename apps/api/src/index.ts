@@ -8,12 +8,9 @@ import { authRateLimit, jobHunterRateLimit, matchingRateLimit, writeRateLimit } 
 
 const app = express()
 const PORT = process.env.PORT || 3001
-const isVercel = process.env.VERCEL === '1'
 const enableLegacyScraper = process.env.ENABLE_LEGACY_SCRAPER === 'true'
 const allowedOrigins = new Set([
   'http://localhost:3000',
-  'https://gethiredasap.vercel.app',
-  'https://gethiredasap-web.vercel.app',
   process.env.CLIENT_URL,
 ].filter(Boolean))
 
@@ -152,18 +149,16 @@ const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
 app.use(errorHandler)
 
 // ── START SERVER ──
-if (!isVercel) {
-  app.listen(PORT, () => {
-    console.log(`🚀 API running on http://localhost:${PORT}`)
-    console.log(`📊 Health check: http://localhost:${PORT}/health`)
-  })
+app.listen(PORT, () => {
+  console.log(`🚀 API running on http://localhost:${PORT}`)
+  console.log(`📊 Health check: http://localhost:${PORT}/health`)
+})
 
-  if (enableLegacyScraper) {
-    const { startScheduler } = require('./workers/scheduler')
-    startScheduler()
-  } else {
-    console.log('Legacy scraper disabled. Using AI Job Hunter API as job source.')
-  }
+if (enableLegacyScraper) {
+  const { startScheduler } = require('./workers/scheduler')
+  startScheduler()
+} else {
+  console.log('Legacy scraper disabled. Using AI Job Hunter API as job source.')
 }
 
 export default app
