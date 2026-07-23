@@ -101,8 +101,8 @@ function panelStyle(height = '100%') {
   return {
     background: 'var(--bg2)',
     border: '1px solid rgba(255,255,255,0.06)',
-    borderRadius: '18px',
-    padding: '20px 22px',
+    borderRadius: '8px',
+    padding: '18px 20px',
     height,
     boxShadow: '0 18px 48px rgba(0,0,0,0.22)',
   } as const
@@ -120,7 +120,7 @@ function SectionHeader({ eyebrow, title, description, action }: {
         <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', letterSpacing: '2px', textTransform: 'uppercase', color: 'var(--accent)', marginBottom: '8px' }}>
           {eyebrow}
         </div>
-        <h1 style={{ margin: 0, fontFamily: 'Playfair Display, serif', fontSize: 'clamp(34px,4vw,52px)', lineHeight: 1.05, color: 'var(--text)' }}>
+        <h1 style={{ margin: 0, fontFamily: 'Playfair Display, serif', fontSize: '34px', lineHeight: 1.08, color: 'var(--text)' }}>
           {title}
         </h1>
         <p style={{ margin: '10px 0 0', color: 'var(--muted2)', fontSize: '15px', maxWidth: '760px', lineHeight: 1.55 }}>
@@ -134,12 +134,14 @@ function SectionHeader({ eyebrow, title, description, action }: {
 
 function MetricCard({ icon, label, value, accent }: { icon: React.ReactNode; label: string; value: number; accent: string }) {
   return (
-    <div style={{ ...panelStyle(), padding: '18px 18px 16px' }}>
-      <div style={{ width: '40px', height: '40px', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: `${accent}12`, color: accent, border: `1px solid ${accent}28`, marginBottom: '14px' }}>
+    <div style={{ ...panelStyle(), padding: '15px 16px', display: 'grid', gridTemplateColumns: '34px 1fr', alignItems: 'center', gap: '12px' }}>
+      <div style={{ width: '34px', height: '34px', borderRadius: '7px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: `${accent}12`, color: accent, border: `1px solid ${accent}28` }}>
         {icon}
       </div>
-      <div style={{ fontFamily: 'Playfair Display, serif', fontSize: '36px', lineHeight: 1, color: 'var(--text)', marginBottom: '8px' }}>{value.toLocaleString()}</div>
-      <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '11px', letterSpacing: '1px', textTransform: 'uppercase', color: 'var(--muted2)' }}>{label}</div>
+      <div>
+        <div style={{ fontFamily: 'DM Sans, sans-serif', fontSize: '25px', fontWeight: 700, lineHeight: 1, color: 'var(--text)', marginBottom: '6px' }}>{value.toLocaleString()}</div>
+        <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '9px', letterSpacing: '1px', textTransform: 'uppercase', color: 'var(--muted2)' }}>{label}</div>
+      </div>
     </div>
   )
 }
@@ -243,7 +245,7 @@ export default function DashboardPage() {
     onSuccess: (data: any) => {
       qc.invalidateQueries({ predicate: query => typeof query.queryKey?.[0] === 'string' && String(query.queryKey[0]).startsWith('job-hunter') })
       qc.invalidateQueries({ queryKey: ['saved-searches'] })
-      toast.success(`Fetched new jobs${typeof data?.inserted_new_jobs === 'number' || typeof data?.updated_existing_jobs === 'number' ? ` · ${data?.inserted_new_jobs ?? 0} new, ${data?.updated_existing_jobs ?? 0} updated` : ''}`)
+      toast.success(data?.message || `Fetched new jobs${typeof data?.inserted_new_jobs === 'number' || typeof data?.updated_existing_jobs === 'number' ? ` · ${data?.inserted_new_jobs ?? 0} new, ${data?.updated_existing_jobs ?? 0} updated` : ''}`)
     },
     onError: (error: any) => {
       const detail = error?.response?.data?.detail
@@ -310,7 +312,7 @@ export default function DashboardPage() {
       <SectionHeader
         eyebrow="// command center"
         title="Job Command Center"
-        description="A fast read on discovery volume, application momentum, source mix, and match quality across AI Job Hunter. This view stays read-only for job data and builds on the APIs already powering Feed, Hunter, and Top."
+        description="Discovery health, fresh opportunities, and application activity in one view."
         action={
           <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
             <Link href="/job-hunter" style={{ textDecoration: 'none', borderRadius: '12px', padding: '10px 14px', background: 'rgba(0,255,136,0.08)', border: '1px solid rgba(0,255,136,0.18)', color: 'var(--accent)', fontWeight: 700 }}>
@@ -325,7 +327,7 @@ export default function DashboardPage() {
 
       <div style={{ ...panelStyle(), display: 'flex', justifyContent: 'space-between', gap: '14px', alignItems: 'center', flexWrap: 'wrap' }}>
         <div>
-          <div style={{ color: 'var(--text2)', fontWeight: 700 }}>Analytics snapshot ready</div>
+          <div style={{ color: 'var(--text2)', fontWeight: 700 }}>Data snapshot</div>
           <div style={{ color: 'var(--muted2)', fontSize: '13px', marginTop: '4px' }}>
             Generated {formatTimestamp(data.generated_at)} · Match score distribution source: {data.scoring_mode.replaceAll('_', ' ')}
           </div>
@@ -336,7 +338,7 @@ export default function DashboardPage() {
             disabled={refreshJobsMutation.isPending}
             style={{ borderRadius: '10px', padding: '10px 14px', border: '1px solid var(--accent)', background: refreshJobsMutation.isPending ? 'rgba(0,255,136,0.4)' : 'var(--accent)', color: '#07080C', cursor: refreshJobsMutation.isPending ? 'wait' : 'pointer', fontWeight: 700 }}
           >
-            {refreshJobsMutation.isPending ? 'Fetching new jobs…' : 'Fetch new jobs'}
+            {refreshJobsMutation.isPending ? 'Reloading jobs…' : 'Reload latest jobs'}
           </button>
           <button
             onClick={() => commandCenterQuery.refetch()}
@@ -347,11 +349,11 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '14px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(155px, 1fr))', gap: '10px' }}>
         {overviewCards.map(card => <MetricCard key={card.label} {...card} />)}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '14px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(175px, 1fr))', gap: '10px' }}>
         {savedSearchCards.map(card => <MetricCard key={card.label} {...card} />)}
       </div>
 
@@ -371,7 +373,7 @@ export default function DashboardPage() {
         <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '11px', letterSpacing: '1px', textTransform: 'uppercase', color: 'var(--muted2)', marginBottom: '12px' }}>
           Application Pipeline
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '14px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(175px, 1fr))', gap: '10px' }}>
           {pipelineCards.map(card => <MetricCard key={card.label} {...card} />)}
         </div>
       </div>

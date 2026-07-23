@@ -60,6 +60,10 @@ export default function LoginPage() {
   const [loading,  setLoading]  = useState(false)
   const [focused,  setFocused]  = useState<string | null>(null)
 
+  useEffect(() => {
+    router.prefetch('/dashboard')
+  }, [router])
+
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
@@ -75,7 +79,11 @@ export default function LoginPage() {
       }
       setAuth(data.user, data.accessToken)
       toast.success('Welcome back')
-      router.replace('/dashboard')
+      const requestedPath = new URLSearchParams(window.location.search).get('next')
+      const destination = requestedPath?.startsWith('/') && !requestedPath.startsWith('//')
+        ? requestedPath
+        : '/dashboard'
+      router.replace(destination)
     } catch (err: any) {
       toast.error(err?.message || 'Invalid credentials')
     } finally {
