@@ -681,13 +681,14 @@ function hashResumeText(resumeText: string) {
 }
 
 function personalizedMatchCacheKey(userId: string, profile: UserProfileForMatching, query: JobHunterJobsQuery) {
+  const { page: _page, offset: _offset, limit: _limit, sort: _sort, ...scoringQuery } = query
   return JSON.stringify({
     userId,
     resumeHash: hashResumeText(profile.resumeText || ''),
     searches: (profile.searches || [])
       .map(search => ({ role: normalize(search.role), location: normalize(search.location) }))
       .sort((left, right) => `${left.role}|${left.location}`.localeCompare(`${right.role}|${right.location}`)),
-    query: normalizedQuery(query),
+    query: normalizedQuery(scoringQuery),
   })
 }
 
@@ -1513,36 +1514,46 @@ export async function getJobHunterMatches(query: JobHunterJobsQuery, profile: Us
     }
   }
 
-  if (userId) {
-    const cacheKey = personalizedMatchCacheKey(userId, profile, query)
-    const cachedValue = getCachedPersonalizedMatches(cacheKey)
-    if (cachedValue) {
-      console.info(`[cache] personalized matches hit user=${userId} ttl=${PERSONALIZED_MATCH_CACHE_TTL_MS}ms`)
-      return cachedValue
+  const cacheKey = userId ? personalizedMatchCacheKey(userId, profile, query) : null
+  const cachedValue = cacheKey ? getCachedPersonalizedMatches(cacheKey) : null
+  let items: any[]
+  let scoringMethod: string
+  let fallbackWarning: string
+  let lastUpdated: string | null
+
+  if (cachedValue) {
+    items = cachedValue.items
+    scoringMethod = cachedValue.scoringMethod
+    fallbackWarning = cachedValue.fallbackWarning
+    lastUpdated = cachedValue.lastUpdated
+    console.info(`[cache] personalized matches hit user=${userId} ttl=${PERSONALIZED_MATCH_CACHE_TTL_MS}ms`)
+  } else {
+    const candidateSet = await getPersonalizedCandidateJobs(query, profile)
+    const jobs = candidateSet.jobs
+    const ruleMatches = jobs
+      .filter(job => jobPassesProfileEligibility(job, profile))
+      .map(job => scoreJobForUser(job, profile))
+    scoringMethod = 'nlp_semantic'
+    fallbackWarning = ''
+    lastUpdated = candidateSet.lastUpdated
+
+    try {
+      const nlpJobs = await scoreJobsWithNlp(jobs, profile.resumeText)
+      const nlpById = new Map(nlpJobs.map((job: any) => [job.id, job]))
+
+      items = ruleMatches
+        .map(match => buildSemanticItem(match, nlpById.get(match.job.id), profile))
+        .sort((a, b) => b.final_match_score - a.final_match_score)
+    } catch (error: any) {
+      scoringMethod = 'rule_fallback'
+      fallbackWarning = error.response?.data?.detail || error.message || 'NLP service unavailable; using rule-based matching.'
+      items = ruleMatches.map(match => buildRuleFallbackItem(match, profile))
     }
-  }
 
-  const candidateSet = await getPersonalizedCandidateJobs(query, profile)
-  const jobs = candidateSet.jobs
-  const ruleMatches = jobs
-    .filter(job => jobPassesProfileEligibility(job, profile))
-    .map(job => scoreJobForUser(job, profile))
-  let items
-  let scoringMethod = 'nlp_semantic'
-  let fallbackWarning = ''
-
-  try {
-    const nlpJobs = await scoreJobsWithNlp(jobs, profile.resumeText)
-    const nlpById = new Map(nlpJobs.map((job: any) => [job.id, job]))
-
-    items = ruleMatches
-      .map(match => buildSemanticItem(match, nlpById.get(match.job.id), profile))
-      .sort((a, b) => b.final_match_score - a.final_match_score)
-  } catch (error: any) {
-    scoringMethod = 'rule_fallback'
-    fallbackWarning = error.response?.data?.detail || error.message || 'NLP service unavailable; using rule-based matching.'
-    items = ruleMatches
-      .map(match => buildRuleFallbackItem(match, profile))
+    if (cacheKey) {
+      setCachedPersonalizedMatches(cacheKey, { items, scoringMethod, fallbackWarning, lastUpdated })
+      console.info(`[cache] personalized matches store user=${userId} ttl=${PERSONALIZED_MATCH_CACHE_TTL_MS}ms`)
+    }
   }
 
   const sortedItems = sortMatchedItems(items, String(query.sort || 'score_desc'))
@@ -1561,13 +1572,7 @@ export async function getJobHunterMatches(query: JobHunterJobsQuery, profile: Us
     total_pages: totalPages,
     has_prev: requestedPage > 1,
     has_next: requestedPage < totalPages,
-    last_updated: candidateSet.lastUpdated || sortedItems[0]?.job?.updated_at || sortedItems[0]?.job?.first_seen || null,
-  }
-
-  if (userId) {
-    const cacheKey = personalizedMatchCacheKey(userId, profile, query)
-    setCachedPersonalizedMatches(cacheKey, response)
-    console.info(`[cache] personalized matches store user=${userId} ttl=${PERSONALIZED_MATCH_CACHE_TTL_MS}ms`)
+    last_updated: lastUpdated || sortedItems[0]?.job?.updated_at || sortedItems[0]?.job?.first_seen || null,
   }
 
   return response

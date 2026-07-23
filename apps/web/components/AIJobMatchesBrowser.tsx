@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { getJobHunterMatches, getJobHunterResumeGap, normalizeJobHunterQuery, type JobHunterJobsQuery } from '@/lib/api'
+import { getJobHunterMatches, getJobHunterResumeGap, jobHunterQueryKeys, type JobHunterJobsQuery } from '@/lib/api'
 import JobWorkflowActions, { StatusBadge } from '@/components/JobWorkflowActions'
 
 type SummaryCounts = {
@@ -18,7 +18,6 @@ type Props = {
   subtitle?: string
   emptyTitle?: string
   emptyBody?: string
-  queryKeyPrefix: string
   showExplainability?: boolean
 }
 
@@ -474,7 +473,6 @@ export default function AIJobMatchesBrowser({
   subtitle = 'Explore your ranked matches with filters, search, and pagination.',
   emptyTitle = 'No personalized matches yet.',
   emptyBody = 'Try clearing a filter or upload a stronger resume profile.',
-  queryKeyPrefix,
   showExplainability = false,
 }: Props) {
   const [page, setPage] = useState(1)
@@ -513,7 +511,7 @@ export default function AIJobMatchesBrowser({
   }
 
   const matchesQuery = useQuery({
-    queryKey: [queryKeyPrefix, normalizeJobHunterQuery(query)],
+    queryKey: jobHunterQueryKeys.personalizedMatches(query),
     queryFn: () => getJobHunterMatches(query),
     placeholderData: previousData => previousData,
   })

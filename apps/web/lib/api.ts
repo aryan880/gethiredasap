@@ -50,7 +50,9 @@ export function normalizeJobHunterQuery(query: JobHunterJobsQuery = {}) {
 }
 
 export const DEFAULT_PERSONALIZED_MATCHES_QUERY: JobHunterJobsQuery = {
-  limit: 100,
+  page: 1,
+  limit: 25,
+  sort: 'score_desc',
 }
 
 export const jobHunterQueryKeys = {

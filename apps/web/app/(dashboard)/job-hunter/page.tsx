@@ -973,7 +973,6 @@ export default function JobHunterPage() {
             </div>
           )}
           <AIJobMatchesBrowser
-            queryKeyPrefix="job-hunter-personalized-browser"
             summary={summary}
             title="Browse personalized matches"
             subtitle="Browse your AI-ranked matches with filters, search, and pagination."

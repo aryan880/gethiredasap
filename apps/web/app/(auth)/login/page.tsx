@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { toast } from 'sonner'
 import { useAuthStore } from '@/lib/store'
+import api from '@/lib/api'
 
 function Particles() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -68,15 +69,7 @@ export default function LoginPage() {
     e.preventDefault()
     setLoading(true)
     try {
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-      })
-      const data = await response.json().catch(() => ({}))
-      if (!response.ok) {
-        throw new Error(data?.error || 'Invalid credentials')
-      }
+      const { data } = await api.post('/auth/login', { email, password })
       setAuth(data.user, data.accessToken)
       toast.success('Welcome back')
       const requestedPath = new URLSearchParams(window.location.search).get('next')
@@ -85,7 +78,9 @@ export default function LoginPage() {
         : '/dashboard'
       router.replace(destination)
     } catch (err: any) {
-      toast.error(err?.message || 'Invalid credentials')
+      const retryAfter = err?.response?.data?.retryAfter
+      const message = err?.response?.data?.error || err?.message || 'Invalid credentials'
+      toast.error(retryAfter ? `${message} Try again in ${retryAfter} seconds.` : message)
     } finally {
       setLoading(false)
     }

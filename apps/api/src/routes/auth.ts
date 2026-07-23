@@ -20,6 +20,7 @@ const router = Router()
 // POST /auth/register
 // Creates a new user account
 router.post('/register', authAttemptRateLimit, async (req: Request, res: Response) => {
+  const startedAt = Date.now()
   try {
     const email = cleanString(req.body.email, 254).toLowerCase()
     const password = typeof req.body.password === 'string' ? req.body.password : ''
@@ -92,6 +93,7 @@ router.post('/register', authAttemptRateLimit, async (req: Request, res: Respons
       isAdmin: user.isAdmin,
     })
 
+    console.info(`[timing] auth.register ${Date.now() - startedAt}ms`)
     res.status(201).json({
       message: 'Account created successfully',
       user,
@@ -108,6 +110,7 @@ router.post('/register', authAttemptRateLimit, async (req: Request, res: Respons
 // POST /auth/login
 // Authenticates user and returns tokens
 router.post('/login', authAttemptRateLimit, async (req: Request, res: Response) => {
+  const startedAt = Date.now()
   try {
     const email = cleanString(req.body.email, 254).toLowerCase()
     const password = typeof req.body.password === 'string' ? req.body.password : ''
@@ -148,6 +151,7 @@ router.post('/login', authAttemptRateLimit, async (req: Request, res: Response) 
       isAdmin: user.isAdmin,
     })
 
+    console.info(`[timing] auth.login ${Date.now() - startedAt}ms`)
     res.json({
       message: 'Login successful',
       user: {
@@ -161,6 +165,7 @@ router.post('/login', authAttemptRateLimit, async (req: Request, res: Response) 
         isActive: user.isActive,
         isAdmin: user.isAdmin,
         resumeText: user.resumeText,
+        activeResumeFamily: user.activeResumeFamily,
         createdAt: user.createdAt,
       },
       accessToken,
