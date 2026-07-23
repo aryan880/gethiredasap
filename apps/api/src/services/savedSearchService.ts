@@ -2,7 +2,7 @@ import prisma from '../config/database'
 import { getJobHunterJobs, type JobHunterJob, type JobHunterJobsQuery } from './jobHunterService'
 
 const JOBS_PAGE_LIMIT = 500
-const JOBS_MAX_PAGES = 12
+const JOBS_MAX_PAGES = 100
 const SEARCH_CACHE_TTL_MS = 60_000
 
 export type SavedSearchInput = {
@@ -363,7 +363,7 @@ function savedSearchRelevance(job: any, search: any) {
   }
 
   return {
-    score,
+    score: Math.max(0, Math.min(100, Math.round(score))),
     titleMatches,
     textMatches,
     hasRoleFamily: families.length > 0,
@@ -466,7 +466,7 @@ function jobMatchesSavedSearch(job: any, search: any) {
     return false
   }
 
-  if (Number(job.score || 0) < Number(search.minimumMatchScore || 0)) {
+  if (relevance.score < Number(search.minimumMatchScore || 0)) {
     return false
   }
 
@@ -484,6 +484,7 @@ function jobMatchesSavedSearch(job: any, search: any) {
 }
 
 function buildAlertPayload(search: any, job: any) {
+  const matchScore = savedSearchRelevance(job, search).score
   return {
     searchId: search.id,
     searchName: search.name,
@@ -497,7 +498,8 @@ function buildAlertPayload(search: any, job: any) {
       source: job.source,
       category: job.category,
       workMode: job.work_mode,
-      score: job.score,
+      score: matchScore,
+      savedSearchMatchScore: matchScore,
       firstSeen: job.first_seen,
       posted: job.posted,
       link: job.link,
@@ -683,7 +685,8 @@ function parseJobTimestamp(value?: string | null) {
   return Number.isNaN(date.getTime()) ? null : date
 }
 
-export async function evaluateSavedSearchesForUser(userId: string) {
+export async function evaluateSavedSearchesForUser(userId: string, options: { advanceCursor?: boolean } = {}) {
+  const advanceCursor = Boolean(options.advanceCursor)
   const [searches, jobs] = await Promise.all([
     prisma.savedSearch.findMany({
       where: { userId },
@@ -704,7 +707,10 @@ export async function evaluateSavedSearchesForUser(userId: string) {
     })
 
     const newMatchesSinceLastRun = matches.filter(job => {
-      if (!previousEvaluatedAt) return true
+      if (!previousEvaluatedAt) {
+        const firstSeen = parseJobTimestamp(job.first_seen)
+        return Boolean(firstSeen && firstSeen.getTime() >= lookbackThreshold)
+      }
       const firstSeen = parseJobTimestamp(job.first_seen)
       return Boolean(firstSeen && firstSeen.getTime() > previousEvaluatedAt.getTime())
     })
@@ -713,7 +719,7 @@ export async function evaluateSavedSearchesForUser(userId: string) {
       ? newMatchesSinceLastRun.filter(job => true)
       : []
 
-    if (search.enabled && newMatches.length > 0) {
+    if (advanceCursor && search.enabled && newMatches.length > 0) {
       await prisma.savedSearchAlert.createMany({
         data: newMatches.map(job => ({
           savedSearchId: search.id,
@@ -724,11 +730,13 @@ export async function evaluateSavedSearchesForUser(userId: string) {
       })
     }
 
-    const evaluatedAt = new Date()
-    await prisma.savedSearch.update({
-      where: { id: search.id },
-      data: { lastEvaluatedAt: evaluatedAt },
-    })
+    const evaluatedAt = advanceCursor ? new Date() : previousEvaluatedAt
+    if (advanceCursor && evaluatedAt) {
+      await prisma.savedSearch.update({
+        where: { id: search.id },
+        data: { lastEvaluatedAt: evaluatedAt },
+      })
+    }
 
     const pendingAlerts = await prisma.savedSearchAlert.count({
       where: {
@@ -745,7 +753,7 @@ export async function evaluateSavedSearchesForUser(userId: string) {
       matchingJobsToday: matchingToday.length,
       newMatchingJobsSinceLastRun: newMatchesSinceLastRun.length,
       pendingAlerts,
-      lastEvaluatedAt: evaluatedAt.toISOString(),
+      lastEvaluatedAt: evaluatedAt?.toISOString() || null,
       latestMatches: matchingToday.slice(0, 5).map(job => ({
         id: job.id,
         title: job.title,

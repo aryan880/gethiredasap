@@ -687,7 +687,7 @@ export default function JobHunterPage() {
     onSuccess: (data: any) => {
       qc.invalidateQueries({ predicate: query => typeof query.queryKey?.[0] === 'string' && String(query.queryKey[0]).startsWith('job-hunter') })
       qc.invalidateQueries({ queryKey: ['saved-searches'] })
-      toast.success(`Fetched new jobs${typeof data?.inserted_new_jobs === 'number' || typeof data?.updated_existing_jobs === 'number' ? ` · ${data?.inserted_new_jobs ?? 0} new, ${data?.updated_existing_jobs ?? 0} updated` : ''}`)
+      toast.success(data?.message || `Fetched new jobs${typeof data?.inserted_new_jobs === 'number' || typeof data?.updated_existing_jobs === 'number' ? ` · ${data?.inserted_new_jobs ?? 0} new, ${data?.updated_existing_jobs ?? 0} updated` : ''}`)
     },
     onError: (error: any) => {
       const detail = error?.response?.data?.detail

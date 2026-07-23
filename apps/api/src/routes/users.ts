@@ -216,6 +216,8 @@ router.post('/searches', async (req: AuthRequest, res: Response) => {
       },
     })
 
+    clearPersonalizedMatchesCache(req.user!.userId)
+
     res.status(201).json({ message: 'Search added successfully', search })
   } catch (error) {
     console.error('Add search error:', error)
@@ -248,6 +250,8 @@ router.delete('/searches/:id', async (req: AuthRequest, res: Response) => {
       where: { id: String(req.params.id) },
       data: { isActive: false },
     })
+
+    clearPersonalizedMatchesCache(req.user!.userId)
 
     res.json({ message: 'Search removed successfully' })
   } catch (error) {

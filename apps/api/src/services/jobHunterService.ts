@@ -6,7 +6,7 @@ const NLP_URL = process.env.NLP_URL || 'http://localhost:8002'
 const MAX_MATCH_JOBS = 100
 const PERSONALIZED_CANDIDATE_POOL_SIZE = 300
 const PERSONALIZED_RECENT_CANDIDATES = 175
-const PERSONALIZED_TOP_CANDIDATES = 175
+const PERSONALIZED_POSTED_CANDIDATES = 175
 const JOB_HUNTER_API_KEY = process.env.JOB_HUNTER_API_KEY || ''
 const NLP_API_KEY = process.env.NLP_API_KEY || ''
 const PERSONALIZED_MATCH_CACHE_TTL_MS = 5 * 60 * 1000
@@ -99,6 +99,15 @@ type RoleIntentFamily = {
 
 const personalizedMatchCache = new Map<string, PersonalizedMatchCacheEntry>()
 
+const ROLE_FAMILY_SEARCH_PROBES: Record<string, string[]> = {
+  software_engineering: ['developer', 'software', 'engineer'],
+  business_analysis: ['business analyst', 'operations analyst', 'project coordinator'],
+  it_support: ['technical support', 'application support', 'service desk'],
+  systems_analysis: ['systems analyst', 'application analyst'],
+  customer_success: ['customer success', 'implementation'],
+  sales_development: ['sales representative', 'sales development', 'business development'],
+}
+
 const ROLE_INTENT_FAMILIES: RoleIntentFamily[] = [
   {
     key: 'software_engineering',
@@ -109,7 +118,6 @@ const ROLE_INTENT_FAMILIES: RoleIntentFamily[] = [
       'junior software engineer',
       'junior software developer',
       'junior developer',
-      'developer',
       'web developer',
       'frontend developer',
       'front-end developer',
@@ -135,9 +143,45 @@ const ROLE_INTENT_FAMILIES: RoleIntentFamily[] = [
     categoryAliases: ['business analysis', 'operations'],
     adjacentSignals: ['requirements gathering', 'stakeholder management', 'process mapping', 'reporting'],
   },
+  {
+    key: 'it_support',
+    triggers: ['it support', 'technical support', 'service desk', 'help desk', 'helpdesk', 'application support'],
+    aliases: ['it support', 'technical support', 'service desk analyst', 'help desk analyst', 'helpdesk analyst', 'application support analyst', 'desktop support', 'support technician'],
+    categoryAliases: ['it support'],
+    adjacentSignals: ['troubleshooting', 'ticketing', 'active directory', 'windows', 'networking', 'customer support'],
+    mismatchSignals: ['software engineer', 'software developer', 'account executive'],
+  },
+  {
+    key: 'systems_analysis',
+    triggers: ['systems analyst', 'business systems analyst', 'application analyst'],
+    aliases: ['systems analyst', 'business systems analyst', 'application analyst', 'information systems analyst', 'technical analyst'],
+    categoryAliases: ['business analysis', 'it support', 'data analytics'],
+    adjacentSignals: ['requirements gathering', 'process mapping', 'sql', 'reporting', 'systems integration'],
+  },
+  {
+    key: 'customer_success',
+    triggers: ['customer success', 'client success', 'account management', 'implementation'],
+    aliases: ['customer success', 'customer success specialist', 'customer success manager', 'client success', 'implementation specialist', 'implementation consultant', 'onboarding specialist'],
+    categoryAliases: ['customer success'],
+    adjacentSignals: ['onboarding', 'retention', 'adoption', 'crm', 'renewals'],
+  },
+  {
+    key: 'sales_development',
+    triggers: ['sales representative', 'sales development', 'business development', 'bdr', 'sdr'],
+    aliases: ['sales representative', 'sales development representative', 'business development representative', 'bdr', 'sdr', 'inside sales representative'],
+    categoryAliases: ['sales / bdr'],
+    adjacentSignals: ['crm', 'pipeline', 'prospecting', 'lead generation', 'salesforce'],
+  },
 ]
 
 const ROLE_SIGNALS: KeywordSignal[] = [
+  { keyword: 'software engineer', weight: 16, reason: 'software engineering role match' },
+  { keyword: 'software developer', weight: 16, reason: 'software development role match' },
+  { keyword: 'web developer', weight: 14, reason: 'web development role match' },
+  { keyword: 'frontend developer', weight: 14, reason: 'frontend development role match' },
+  { keyword: 'backend developer', weight: 14, reason: 'backend development role match' },
+  { keyword: 'full stack developer', weight: 14, reason: 'full-stack development role match' },
+  { keyword: 'application developer', weight: 13, reason: 'application development role match' },
   { keyword: 'business analyst', weight: 16, reason: 'business analysis role match' },
   { keyword: 'business operations', weight: 14, reason: 'business operations role match' },
   { keyword: 'operations analyst', weight: 14, reason: 'operations role match' },
@@ -431,7 +475,11 @@ async function getPersonalizedCandidateJobs(query: JobHunterJobsQuery, profile: 
     offset: 0,
   }
 
-  const roleQueries = roleIntentAliases(profile).terms.slice(0, 3)
+  const roleIntent = roleIntentAliases(profile)
+  const roleQueries = unique([
+    ...roleIntent.families.flatMap(family => ROLE_FAMILY_SEARCH_PROBES[family.key] || []),
+    ...roleIntent.terms,
+  ]).slice(0, 6)
 
   const responses = await Promise.all([
     getJobHunterJobs({
@@ -441,8 +489,8 @@ async function getPersonalizedCandidateJobs(query: JobHunterJobsQuery, profile: 
     }),
     getJobHunterJobs({
       ...sharedQuery,
-      limit: PERSONALIZED_TOP_CANDIDATES,
-      sort: 'score_desc',
+      limit: PERSONALIZED_POSTED_CANDIDATES,
+      sort: 'date_posted_desc',
     }),
     ...roleQueries.map(role => getJobHunterJobs({
       ...sharedQuery,
@@ -452,19 +500,19 @@ async function getPersonalizedCandidateJobs(query: JobHunterJobsQuery, profile: 
     })),
   ])
 
-  const [recentResponse, topResponse, ...roleResponses] = responses
+  const [recentResponse, postedResponse, ...roleResponses] = responses
 
   const merged = dedupeJobsById([
-    ...((recentResponse.items || []) as JobHunterJob[]),
-    ...((topResponse.items || []) as JobHunterJob[]),
     ...roleResponses.flatMap(response => (response.items || []) as JobHunterJob[]),
+    ...((recentResponse.items || []) as JobHunterJob[]),
+    ...((postedResponse.items || []) as JobHunterJob[]),
   ])
 
   return {
     jobs: merged.slice(0, PERSONALIZED_CANDIDATE_POOL_SIZE),
     lastUpdated:
       recentResponse.last_updated ||
-      topResponse.last_updated ||
+      postedResponse.last_updated ||
       roleResponses.find(response => response.last_updated)?.last_updated ||
       null,
   }
@@ -633,10 +681,13 @@ function hashResumeText(resumeText: string) {
   return createHash('sha256').update(resumeText).digest('hex')
 }
 
-function personalizedMatchCacheKey(userId: string, resumeText: string, query: JobHunterJobsQuery) {
+function personalizedMatchCacheKey(userId: string, profile: UserProfileForMatching, query: JobHunterJobsQuery) {
   return JSON.stringify({
     userId,
-    resumeHash: hashResumeText(resumeText),
+    resumeHash: hashResumeText(profile.resumeText || ''),
+    searches: (profile.searches || [])
+      .map(search => ({ role: normalize(search.role), location: normalize(search.location) }))
+      .sort((left, right) => `${left.role}|${left.location}`.localeCompare(`${right.role}|${right.location}`)),
     query: normalizedQuery(query),
   })
 }
@@ -781,6 +832,72 @@ function roleIntentScore(job: JobHunterJob, profile: UserProfileForMatching) {
   }
 }
 
+const SENIOR_TITLE_SIGNALS = [
+  'senior', 'sr.', 'staff', 'principal', 'lead', 'manager', 'director',
+  'head of', 'vice president', 'vp', 'smts', 'lmts',
+]
+
+const EARLY_CAREER_INTENT_SIGNALS = [
+  'junior', 'entry level', 'entry-level', 'new grad', 'graduate', 'intern',
+]
+
+const CANADA_LOCATION_SIGNALS = [
+  'canada', 'british columbia', 'bc', 'vancouver', 'surrey', 'burnaby',
+  'richmond', 'coquitlam', 'langley', 'toronto', 'ontario', 'gta',
+]
+
+const CLEARLY_NON_CANADA_LOCATIONS = [
+  'india', 'hyderabad', 'bengaluru', 'bangalore', 'united states', 'usa',
+  'us', 'san francisco', 'delaware',
+  'california', 'texas', 'new york', 'ireland', 'united kingdom', 'germany',
+  'france', 'spain', 'argentina', 'australia', 'singapore',
+  'alabama', 'alaska', 'arizona', 'arkansas', 'colorado', 'connecticut',
+  'delaware', 'florida', 'georgia', 'hawaii', 'idaho', 'illinois', 'indiana',
+  'iowa', 'kansas', 'kentucky', 'louisiana', 'maine', 'maryland',
+  'massachusetts', 'michigan', 'minnesota', 'mississippi', 'missouri',
+  'montana', 'nebraska', 'nevada', 'new hampshire', 'new jersey',
+  'new mexico', 'north carolina', 'north dakota', 'ohio', 'oklahoma',
+  'oregon', 'pennsylvania', 'rhode island', 'south carolina',
+  'south dakota', 'tennessee', 'utah', 'vermont', 'virginia', 'washington',
+  'west virginia', 'wisconsin', 'wyoming',
+]
+
+function jobPassesProfileEligibility(job: JobHunterJob, profile: UserProfileForMatching) {
+  const title = normalize(job.title)
+  const category = normalize(job.category)
+  const location = normalize(job.location)
+  const explicitRoles = (profile.searches || []).map(search => normalize(search.role)).filter(Boolean)
+  const explicitLocations = (profile.searches || []).map(search => normalize(search.location)).filter(Boolean)
+  const targetFamilies = roleFamiliesForTerms(explicitRoles)
+
+  if (targetFamilies.length > 0) {
+    const roleFamilyMatch = targetFamilies.some(family =>
+      family.aliases.some(alias => includesKeyword(title, alias))
+      || (family.categoryAliases || []).some(alias => includesKeyword(category, alias))
+    )
+    if (!roleFamilyMatch) return false
+  }
+
+  const earlyCareerIntent = explicitRoles.some(role =>
+    EARLY_CAREER_INTENT_SIGNALS.some(signal => includesKeyword(role, signal))
+  )
+  if (earlyCareerIntent && SENIOR_TITLE_SIGNALS.some(signal => includesKeyword(title, signal))) {
+    return false
+  }
+
+  const canadaTarget = explicitLocations.some(target =>
+    CANADA_LOCATION_SIGNALS.some(signal => includesKeyword(target, signal))
+  )
+  const geographicText = `${title} ${location}`
+  const clearlyOutsideCanada = CLEARLY_NON_CANADA_LOCATIONS.some(signal => includesKeyword(geographicText, signal))
+  const explicitlyCanada = CANADA_LOCATION_SIGNALS.some(signal => includesKeyword(location, signal))
+  if (canadaTarget && clearlyOutsideCanada && !explicitlyCanada) {
+    return false
+  }
+
+  return true
+}
+
 function titleCase(value: string) {
   return value.replace(/\b\w/g, char => char.toUpperCase())
 }
@@ -867,13 +984,19 @@ function resumeSuggestions(missingKeywords: string[], matchedKeywords: string[])
   )
 }
 
-function freshnessLocationSourceBonus(job: JobHunterJob) {
+function freshnessLocationSourceBonus(job: JobHunterJob, profile: UserProfileForMatching) {
   const text = jobText(job)
   let bonus = 0
 
-  if (includesKeyword(text, 'vancouver') || includesKeyword(text, 'surrey') || includesKeyword(text, 'burnaby')) {
+  const explicitLocations = (profile.searches || []).map(search => normalize(search.location)).filter(Boolean)
+  const resume = normalize(profile.resumeText)
+  const resumeLocations = LOCATION_SIGNALS
+    .map(signal => signal.keyword)
+    .filter(keyword => includesKeyword(resume, keyword))
+
+  if (explicitLocations.some(location => includesKeyword(text, location))) {
     bonus += 35
-  } else if (includesKeyword(text, 'canada') || includesKeyword(text, 'remote') || includesKeyword(text, 'bc')) {
+  } else if (resumeLocations.some(location => includesKeyword(text, location))) {
     bonus += 25
   }
 
@@ -931,7 +1054,6 @@ async function scoreJobsWithNlp(jobs: JobHunterJob[], resumeText: string) {
     nlpEndpoint('/score/batch'),
     {
       resume_text: resumeText,
-      candidate_years: 1.5,
       jobs: jobs.map(toNlpJob),
     },
     {
@@ -958,7 +1080,6 @@ async function scoreSingleJobWithNlp(job: JobHunterJob, resumeText: string) {
         job.category,
         job.description,
       ].filter(Boolean).join(' '),
-      candidate_years: 1.5,
     },
     {
       timeout: 10_000,
@@ -969,9 +1090,9 @@ async function scoreSingleJobWithNlp(job: JobHunterJob, resumeText: string) {
   return response.data
 }
 
-function buildRuleFallbackItem(match: RuleMatch) {
+function buildRuleFallbackItem(match: RuleMatch, profile: UserProfileForMatching) {
   const ruleScore = match.user_match_score
-  const bonus = freshnessLocationSourceBonus(match.job)
+  const bonus = freshnessLocationSourceBonus(match.job, profile)
 
   return {
     ...match,
@@ -987,10 +1108,10 @@ function buildRuleFallbackItem(match: RuleMatch) {
   }
 }
 
-function buildSemanticItem(match: RuleMatch, nlpJob: any) {
+function buildSemanticItem(match: RuleMatch, nlpJob: any, profile: UserProfileForMatching) {
   const nlpScore = Number(nlpJob?.score || 0)
   const ruleScore = match.user_match_score
-  const bonus = freshnessLocationSourceBonus(match.job)
+  const bonus = freshnessLocationSourceBonus(match.job, profile)
   const finalScore = blendedScore(nlpScore, ruleScore, bonus)
 
   return {
@@ -1077,10 +1198,15 @@ export function scoreJobForUser(job: JobHunterJob, profile: UserProfileForMatchi
     }
   }
 
-  ROLE_SIGNALS.forEach(signal => applySignal(signal, 'job'))
   SKILL_SIGNALS.forEach(signal => applySignal(signal, 'resume'))
+  const explicitLocations = (profile.searches || []).map(search => normalize(search.location)).filter(Boolean)
+  const resumeLocations = LOCATION_SIGNALS
+    .map(signal => signal.keyword)
+    .filter(keyword => includesKeyword(resume, keyword))
   LOCATION_SIGNALS.forEach(signal => {
-    if (includesKeyword(text, signal.keyword)) {
+    const isPreferred = explicitLocations.some(location => includesKeyword(location, signal.keyword) || includesKeyword(signal.keyword, location))
+      || resumeLocations.includes(signal.keyword)
+    if (isPreferred && includesKeyword(text, signal.keyword)) {
       score += signal.weight
       matchReasons.push(signal.reason)
     }
@@ -1111,11 +1237,6 @@ export function scoreJobForUser(job: JobHunterJob, profile: UserProfileForMatchi
   const intent = roleIntentScore(job, profile)
   score += intent.score
   matchReasons.push(...intent.reasons)
-
-  if (typeof job.score === 'number' && job.score > 0) {
-    score += Math.min(12, Math.round(job.score / 10))
-    matchReasons.push('strong global job feed ranking')
-  }
 
   const userMatchScore = Math.max(0, Math.min(100, Math.round(score)))
   const matchedKeywords = unique([
@@ -1394,7 +1515,7 @@ export async function getJobHunterMatches(query: JobHunterJobsQuery, profile: Us
   }
 
   if (userId) {
-    const cacheKey = personalizedMatchCacheKey(userId, profile.resumeText, query)
+    const cacheKey = personalizedMatchCacheKey(userId, profile, query)
     const cachedValue = getCachedPersonalizedMatches(cacheKey)
     if (cachedValue) {
       console.info(`[cache] personalized matches hit user=${userId} ttl=${PERSONALIZED_MATCH_CACHE_TTL_MS}ms`)
@@ -1404,7 +1525,9 @@ export async function getJobHunterMatches(query: JobHunterJobsQuery, profile: Us
 
   const candidateSet = await getPersonalizedCandidateJobs(query, profile)
   const jobs = candidateSet.jobs
-  const ruleMatches = jobs.map(job => scoreJobForUser(job, profile))
+  const ruleMatches = jobs
+    .filter(job => jobPassesProfileEligibility(job, profile))
+    .map(job => scoreJobForUser(job, profile))
   let items
   let scoringMethod = 'nlp_semantic'
   let fallbackWarning = ''
@@ -1414,13 +1537,13 @@ export async function getJobHunterMatches(query: JobHunterJobsQuery, profile: Us
     const nlpById = new Map(nlpJobs.map((job: any) => [job.id, job]))
 
     items = ruleMatches
-      .map(match => buildSemanticItem(match, nlpById.get(match.job.id)))
+      .map(match => buildSemanticItem(match, nlpById.get(match.job.id), profile))
       .sort((a, b) => b.final_match_score - a.final_match_score)
   } catch (error: any) {
     scoringMethod = 'rule_fallback'
     fallbackWarning = error.response?.data?.detail || error.message || 'NLP service unavailable; using rule-based matching.'
     items = ruleMatches
-      .map(buildRuleFallbackItem)
+      .map(match => buildRuleFallbackItem(match, profile))
   }
 
   const sortedItems = sortMatchedItems(items, String(query.sort || 'score_desc'))
@@ -1443,7 +1566,7 @@ export async function getJobHunterMatches(query: JobHunterJobsQuery, profile: Us
   }
 
   if (userId) {
-    const cacheKey = personalizedMatchCacheKey(userId, profile.resumeText, query)
+    const cacheKey = personalizedMatchCacheKey(userId, profile, query)
     setCachedPersonalizedMatches(cacheKey, response)
     console.info(`[cache] personalized matches store user=${userId} ttl=${PERSONALIZED_MATCH_CACHE_TTL_MS}ms`)
   }

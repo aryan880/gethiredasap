@@ -1,6 +1,7 @@
 import { Router, Response } from 'express'
 import {
   analyzeResumeGap,
+  clearPersonalizedMatchesCache,
   getJobHunterHealth,
   getJobHunterJob,
   getJobHunterJobs,
@@ -99,10 +100,12 @@ async function enrichJobResponse(data: any, userId: string) {
 
 function handleProxyError(error: any, res: Response) {
   const status = error.response?.status || 502
-  const detail = error.response?.data || error.message || 'AI Job Hunter API unavailable'
+  console.error('AI Job Hunter proxy failure:', {
+    status,
+    message: error.message,
+  })
   res.status(status).json({
-    error: 'AI Job Hunter proxy error',
-    detail,
+    error: status >= 500 ? 'AI Job Hunter service unavailable' : 'AI Job Hunter request failed',
   })
 }
 
@@ -151,18 +154,50 @@ router.get('/jobs', async (req: AuthRequest, res) => {
 router.post('/refresh', async (req: AuthRequest, res) => {
   const start = startedAt()
   try {
-    const data = await runJobHunterRefresh()
-    logTiming('job-hunter.refresh', start, {
-      inserted_new_jobs: data?.inserted_new_jobs ?? null,
-      updated_existing_jobs: data?.updated_existing_jobs ?? null,
-      failed_sources: Array.isArray(data?.failed_sources) ? data.failed_sources.length : null,
+    clearPersonalizedMatchesCache(req.user!.userId)
+    const health = await getJobHunterHealth()
+    logTiming('job-hunter.refresh', start)
+    res.json({
+      status: 'ok',
+      message: 'Feed refreshed from the latest discovery data.',
+      total_jobs: health?.total_jobs ?? null,
     })
-    res.json(data)
   } catch (error) {
     logTiming('job-hunter.refresh.error', start)
     handleProxyError(error, res)
   }
 })
+
+router.post('/refresh-sources', async (req: AuthRequest, res) => {
+  const start = startedAt()
+  if (!req.user?.isAdmin) {
+    res.status(403).json({ error: 'Administrator access required' })
+    return
+  }
+  try {
+    const data = await runJobHunterRefresh()
+    clearPersonalizedMatchesCache()
+    logTiming('job-hunter.refresh-sources', start, {
+      inserted_new_jobs: data?.inserted_new_jobs ?? null,
+      updated_existing_jobs: data?.updated_existing_jobs ?? null,
+    })
+    res.json(data)
+  } catch (error) {
+    logTiming('job-hunter.refresh-sources.error', start)
+    handleProxyError(error, res)
+  }
+})
+
+function profileSearches(user: any) {
+  const savedSearchRoles = (user.savedSearches || []).flatMap((search: any) =>
+    String(search.keywords || '')
+      .split(/[\n,]/)
+      .map((role: string) => role.trim())
+      .filter(Boolean)
+      .map((role: string) => ({ role, location: String(search.location || '') }))
+  )
+  return [...(user.searches || []), ...savedSearchRoles]
+}
 
 router.get('/matches', async (req: AuthRequest, res) => {
   const start = startedAt()
@@ -178,6 +213,10 @@ router.get('/matches', async (req: AuthRequest, res) => {
             location: true,
           },
         },
+        savedSearches: {
+          where: { enabled: true },
+          select: { keywords: true, location: true },
+        },
       },
     })
 
@@ -186,7 +225,8 @@ router.get('/matches', async (req: AuthRequest, res) => {
       return
     }
 
-    const data = await getJobHunterMatches(req.query as JobHunterJobsQuery, user, req.user!.userId)
+    const profile = { resumeText: user.resumeText, searches: profileSearches(user) }
+    const data = await getJobHunterMatches(req.query as JobHunterJobsQuery, profile, req.user!.userId)
     const response = await enrichMatchesResponse(data, req.user!.userId)
     logTiming('job-hunter.matches', start, {
       total: response?.total ?? response?.items?.length ?? 0,
@@ -214,6 +254,10 @@ router.get('/jobs/:id/resume-gap', async (req: AuthRequest, res) => {
             location: true,
           },
         },
+        savedSearches: {
+          where: { enabled: true },
+          select: { keywords: true, location: true },
+        },
       },
     })
 
@@ -222,7 +266,10 @@ router.get('/jobs/:id/resume-gap', async (req: AuthRequest, res) => {
       return
     }
 
-    res.json(await analyzeResumeGap(String(req.params.id), user))
+    res.json(await analyzeResumeGap(String(req.params.id), {
+      resumeText: user.resumeText,
+      searches: profileSearches(user),
+    }))
   } catch (error) {
     handleProxyError(error, res)
   }

@@ -13,6 +13,7 @@ Endpoints:
     GET  /health       → health check
 """
 
+import hashlib
 import os
 from fastapi import FastAPI, HTTPException
 from fastapi import Request
@@ -22,6 +23,7 @@ from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 from dotenv import load_dotenv
 
+import scorer
 from scorer import (
     build_vectorizer,
     score_job,
@@ -87,12 +89,12 @@ class JobItem(BaseModel):
 class ScoreRequest(BaseModel):
     resume_text:     str
     job_text:        str     # title + company + location + description combined
-    candidate_years: Optional[float] = 1.5
+    candidate_years: Optional[float] = None
 
 class BatchScoreRequest(BaseModel):
     resume_text:     str
     jobs:            List[JobItem]
-    candidate_years: Optional[float] = 1.5
+    candidate_years: Optional[float] = None
 
 class ScoreResult(BaseModel):
     score:           float
@@ -104,13 +106,14 @@ class ScoreResult(BaseModel):
 
 # ── CACHE ──
 # Cache vectorizers per resume to avoid rebuilding on every request
-# Key: first 100 chars of resume (enough to identify it)
+# Key: SHA-256 of the complete resume text. Using a prefix can collide when
+# multiple resumes share the same header or template.
 # Value: (vectorizer, resume_vector)
 _vectorizer_cache: Dict[str, Any] = {}
 
 def get_or_build_vectorizer(resume_text: str):
     """Get cached vectorizer or build a new one."""
-    cache_key = resume_text[:100]
+    cache_key = hashlib.sha256(resume_text.encode("utf-8")).hexdigest()
     if cache_key not in _vectorizer_cache:
         _vectorizer_cache[cache_key] = build_vectorizer(resume_text)
         # Keep cache small — max 100 entries
@@ -128,7 +131,7 @@ def health():
     return {
         "status":       "ok",
         "service":      "nlp",
-        "model":        "sentence-transformers" if True else "tfidf",
+        "model":        "sentence-transformers" if scorer.USE_SEMANTIC else "tfidf",
         "cache_size":   len(_vectorizer_cache),
     }
 

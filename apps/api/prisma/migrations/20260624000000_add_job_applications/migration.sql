@@ -1,12 +1,12 @@
 DO $$
 BEGIN
     CREATE TYPE "ApplicationStatus" AS ENUM (
-        NEW,
-        SAVED,
-        APPLIED,
-        INTERVIEW,
-        OFFER,
-        REJECTED
+        'NEW',
+        'SAVED',
+        'APPLIED',
+        'INTERVIEW',
+        'OFFER',
+        'REJECTED'
     );
 EXCEPTION
     WHEN duplicate_object THEN NULL;
@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS "job_applications" (
     "company" TEXT,
     "location" TEXT,
     "jobUrl" TEXT,
-    "status" "ApplicationStatus" NOT NULL DEFAULT NEW,
+    "status" "ApplicationStatus" NOT NULL DEFAULT 'NEW',
     "recruiterName" TEXT,
     "recruiterEmail" TEXT,
     "followUpNotes" TEXT,

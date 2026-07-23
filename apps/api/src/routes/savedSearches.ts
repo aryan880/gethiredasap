@@ -2,6 +2,7 @@ import { Router, Response } from 'express'
 import prisma from '../config/database'
 import { authenticate, AuthRequest } from '../middleware/auth'
 import { evaluateSavedSearchesForUser, getSavedSearchById, getSavedSearchMatches, validateSavedSearchInput } from '../services/savedSearchService'
+import { clearPersonalizedMatchesCache } from '../services/jobHunterService'
 
 const router = Router()
 router.use(authenticate)
@@ -33,6 +34,16 @@ router.get('/', async (req: AuthRequest, res: Response) => {
     res.json(payload)
   } catch (error) {
     console.error('Get saved searches error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+router.post('/evaluate', async (req: AuthRequest, res: Response) => {
+  try {
+    const payload = await evaluateSavedSearchesForUser(req.user!.userId, { advanceCursor: true })
+    res.json(payload)
+  } catch (error) {
+    console.error('Evaluate saved searches error:', error)
     res.status(500).json({ error: 'Internal server error' })
   }
 })
@@ -108,6 +119,8 @@ router.post('/', async (req: AuthRequest, res: Response) => {
       },
     })
 
+    clearPersonalizedMatchesCache(req.user!.userId)
+
     res.status(201).json({ search })
   } catch (error: any) {
     if (error instanceof Error) {
@@ -169,6 +182,8 @@ router.patch('/:id', async (req: AuthRequest, res: Response) => {
       },
     })
 
+    clearPersonalizedMatchesCache(req.user!.userId)
+
     res.json({ search })
   } catch (error) {
     if (error instanceof Error) {
@@ -192,6 +207,7 @@ router.delete('/:id', async (req: AuthRequest, res: Response) => {
     }
 
     await prisma.savedSearch.delete({ where: { id: existing.id } })
+    clearPersonalizedMatchesCache(req.user!.userId)
     res.json({ message: 'Saved search deleted' })
   } catch (error) {
     console.error('Delete saved search error:', error)
