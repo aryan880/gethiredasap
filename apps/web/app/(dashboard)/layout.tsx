@@ -6,6 +6,15 @@ import { useAuthStore } from '@/lib/store'
 import { useState, useRef, useEffect } from 'react'
 import api from '@/lib/api'
 
+function tokenAppearsCurrent(token: string) {
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')))
+    return typeof payload.exp === 'number' && payload.exp * 1000 > Date.now()
+  } catch {
+    return false
+  }
+}
+
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router   = useRouter()
   const pathname = usePathname()
@@ -15,6 +24,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [authChecked, setAuthChecked] = useState(false)
   const menuRef   = useRef<HTMLDivElement>(null)
   const mobileRef = useRef<HTMLDivElement>(null)
+  const initialPathRef = useRef(pathname)
 
   function handleLogout() {
     logout()
@@ -41,8 +51,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       if (!token) {
         clearAuth()
-        router.replace(`/login?next=${encodeURIComponent(pathname)}`)
+        router.replace(`/login?next=${encodeURIComponent(initialPathRef.current)}`)
         return
+      }
+
+      const storedUser = useAuthStore.getState().user
+      if (storedUser && tokenAppearsCurrent(token)) {
+        setAuthChecked(true)
       }
 
       try {
@@ -53,7 +68,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       } catch {
         if (cancelled) return
         clearAuth()
-        router.replace(`/login?next=${encodeURIComponent(pathname)}`)
+        router.replace(`/login?next=${encodeURIComponent(initialPathRef.current)}`)
       }
     }
 
@@ -62,7 +77,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return () => {
       cancelled = true
     }
-  }, [clearAuth, pathname, router])
+  }, [clearAuth, router])
 
   const links = [
     { href: '/dashboard', label: 'Feed',     icon: '◈' },

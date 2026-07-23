@@ -84,6 +84,8 @@ export default function JobWorkflowActions({ job, workflow }: { job: any; workfl
     }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: jobHunterQueryKeys.personalizedMatchesRoot })
+      qc.invalidateQueries({ queryKey: ['job-hunter-command-center'] })
+      qc.invalidateQueries({ queryKey: ['job-hunter-summary'] })
       qc.invalidateQueries({ queryKey: ['feed-global-browser'] })
       qc.invalidateQueries({ queryKey: ['feed-personalized-browser'] })
       qc.invalidateQueries({ queryKey: ['job-hunter-browser'] })
