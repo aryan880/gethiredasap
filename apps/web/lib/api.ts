@@ -104,6 +104,18 @@ export function getApplicationPackageStats() {
   return api.get('/api/application-packages/stats').then(response => response.data)
 }
 
+export function getDiscoveryCoverage() {
+  return api.get('/api/application-packages/coverage').then(response => response.data)
+}
+
+export function importExternalJob(payload: Record<string, unknown>) {
+  return api.post('/api/application-packages/import', payload).then(response => response.data)
+}
+
+export function updateAutomationMissFeedback(id: string, payload: Record<string, unknown>) {
+  return api.patch(`/api/application-packages/${encodeURIComponent(id)}/missed-feedback`, payload).then(response => response.data)
+}
+
 export function getApplicationPackage(id: string) {
   return api.get(`/api/application-packages/${encodeURIComponent(id)}`).then(response => response.data)
 }

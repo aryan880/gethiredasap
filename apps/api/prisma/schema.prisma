@@ -202,6 +202,11 @@ model ApplicationPackage {
   roleFamily               ResumeFamily                 @default(GENERAL)
   status                   ApplicationPackageStatus     @default(NEEDS_REVIEW)
   workNotes                String?                      @db.Text
+  missedByAutomation       Boolean                      @default(false)
+  automationMissReason     String?
+  automationMissNotes      String?                      @db.Text
+  automationReviewedAt     DateTime?
+  alertedAt                DateTime?
   libraryFolderId          String?
   libraryPath              String?
   createdAt                DateTime                     @default(now())
@@ -216,6 +221,7 @@ model ApplicationPackage {
   @@unique([userId, canonicalJobKey])
   @@index([userId, status, updatedAt])
   @@index([userId, verificationStatus, fitScore])
+  @@index([userId, discoveredBy, missedByAutomation])
   @@map("application_packages")
 }
 

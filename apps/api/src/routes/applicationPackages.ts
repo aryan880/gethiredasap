@@ -1,4 +1,5 @@
 import { Response, Router } from 'express'
+import { createHash } from 'crypto'
 import prisma from '../config/database'
 import { authenticate, AuthRequest } from '../middleware/auth'
 import { cleanString, isEmail } from '../middleware/security'
@@ -43,6 +44,16 @@ const DOCUMENT_KINDS = new Set([
 const CONTACT_TYPES = new Set(['RECRUITER', 'HIRING_MANAGER', 'TEAM_MEMBER', 'ALUMNI', 'GENERAL'])
 const OUTREACH_CHANNELS = new Set(['EMAIL', 'LINKEDIN', 'OTHER'])
 const OUTREACH_STATUSES = new Set(['DRAFT', 'APPROVED', 'SENT', 'REPLIED', 'ARCHIVED'])
+const AUTOMATION_MISS_REASONS = new Set([
+  'SOURCE_NOT_MONITORED',
+  'SOURCE_FAILED',
+  'POLLING_DELAY',
+  'DEDUPLICATION_ERROR',
+  'VALIDATION_REJECTED',
+  'ELIGIBILITY_FILTERED',
+  'INDEXING_DELAY',
+  'UNKNOWN',
+])
 
 router.use(authenticate)
 
@@ -111,20 +122,66 @@ router.get('/stats', async (req: AuthRequest, res: Response) => {
   }
 })
 
-router.post('/queue', async (req: AuthRequest, res: Response) => {
+router.get('/coverage', async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user!.userId
+    const [origins, packageCount, observationCount, missedCount, latency] = await Promise.all([
+      prisma.applicationPackage.groupBy({
+        by: ['discoveredBy'],
+        where: { userId },
+        _count: { discoveredBy: true },
+      }),
+      prisma.applicationPackage.count({ where: { userId } }),
+      prisma.jobSourceObservation.count({ where: { userId } }),
+      prisma.applicationPackage.count({ where: { userId, missedByAutomation: true } }),
+      prisma.$queryRaw<Array<{ average_ms: number | null }>>`
+        SELECT AVG(EXTRACT(EPOCH FROM ("alertedAt" - "firstSeenAt")) * 1000)::float AS average_ms
+        FROM "application_packages"
+        WHERE "userId" = ${userId}
+          AND "alertedAt" IS NOT NULL
+          AND "firstSeenAt" IS NOT NULL
+      `,
+    ])
+    const counts = Object.fromEntries(origins.map(row => [row.discoveredBy, row._count.discoveredBy]))
+    const duplicateObservations = Math.max(0, observationCount - packageCount)
+    res.json({
+      total_canonical_jobs: packageCount,
+      ai_job_hunter_only: counts.AI_JOB_HUNTER || 0,
+      chatgpt_work_only: counts.CHATGPT_WORK || 0,
+      found_by_both: counts.BOTH || 0,
+      manual: counts.MANUAL || 0,
+      source_observations: observationCount,
+      duplicate_observations: duplicateObservations,
+      duplicate_rate: observationCount ? duplicateObservations / observationCount : 0,
+      qualified_roles_missed_by_automation: missedCount,
+      average_discovery_to_alert_ms: latency[0]?.average_ms ?? null,
+    })
+  } catch (error) {
+    console.error('Discovery coverage error:', error)
+    res.status(500).json({ error: 'Unable to load discovery coverage' })
+  }
+})
+
+async function queueApplicationPackage(req: AuthRequest, res: Response) {
   try {
     const source = cleanString(req.body.source, 80)
-    const externalJobId = cleanString(req.body.external_job_id || req.body.job_id, 180)
     const title = cleanString(req.body.title, 300)
     const company = cleanString(req.body.company, 200)
     const location = cleanString(req.body.location, 200) || null
     const jobUrl = cleanString(req.body.job_url || req.body.link, 2000)
+    const requestedExternalJobId = cleanString(req.body.external_job_id || req.body.job_id, 180)
+    const externalJobId = requestedExternalJobId || (
+      validHttpUrl(jobUrl)
+        ? `url-${createHash('sha256').update(jobUrl).digest('hex').slice(0, 32)}`
+        : ''
+    )
     const applicationUrl = cleanString(req.body.application_url, 2000) || null
     const canonicalEmployerUrl = cleanString(req.body.canonical_employer_url, 2000) || null
     const sourceNativeId = cleanString(req.body.source_native_id, 240) || null
     const requisitionId = cleanString(req.body.requisition_id, 240) || null
     const urlProvenance = normalizedEnum(req.body.url_provenance, URL_PROVENANCE) || 'UNKNOWN'
-    const discoveredBy = normalizedEnum(req.body.discovered_by, DISCOVERY_ORIGINS) || 'AI_JOB_HUNTER'
+    const defaultOrigin = req.path === '/import' ? 'CHATGPT_WORK' : 'AI_JOB_HUNTER'
+    const discoveredBy = normalizedEnum(req.body.discovered_by, DISCOVERY_ORIGINS) || defaultOrigin
     const verificationStatus = normalizedEnum(req.body.verification_status, VERIFICATION_STATUSES) || 'UNVERIFIED'
     const roleFamily = normalizedEnum(req.body.role_family, RESUME_FAMILIES) || 'GENERAL'
     const fitScore = clampScore(req.body.fit_score)
@@ -317,6 +374,46 @@ router.post('/queue', async (req: AuthRequest, res: Response) => {
   } catch (error) {
     console.error('Queue application package error:', error)
     res.status(500).json({ error: 'Unable to queue application package' })
+  }
+}
+
+router.post('/queue', queueApplicationPackage)
+router.post('/import', queueApplicationPackage)
+
+router.patch('/:id/missed-feedback', async (req: AuthRequest, res: Response) => {
+  try {
+    const existing = await prisma.applicationPackage.findFirst({
+      where: { id: String(req.params.id), userId: req.user!.userId },
+    })
+    if (!existing) {
+      res.status(404).json({ error: 'Application package not found' })
+      return
+    }
+
+    const missed = Boolean(req.body.missed_by_automation)
+    const reason = missed
+      ? normalizedEnum(req.body.reason, AUTOMATION_MISS_REASONS)
+      : null
+    const notes = cleanString(req.body.notes, 2000) || null
+    if (missed && !reason) {
+      res.status(400).json({ error: 'A valid automation miss reason is required' })
+      return
+    }
+
+    const updated = await prisma.applicationPackage.update({
+      where: { id: existing.id },
+      data: {
+        missedByAutomation: missed,
+        automationMissReason: reason,
+        automationMissNotes: notes,
+        automationReviewedAt: new Date(),
+      },
+      include: packageInclude(),
+    })
+    res.json({ package: applicationPackageResponse(updated) })
+  } catch (error) {
+    console.error('Automation miss feedback error:', error)
+    res.status(500).json({ error: 'Unable to save automation feedback' })
   }
 })
 

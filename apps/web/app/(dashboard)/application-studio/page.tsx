@@ -13,6 +13,7 @@ import {
   FolderLock,
   LoaderCircle,
   SearchCheck,
+  Plus,
   ShieldCheck,
   Sparkles,
   Trash2,
@@ -24,6 +25,7 @@ import {
   downloadCandidateDocument,
   getApplicationPackages,
   getApplicationPackageStats,
+  getDiscoveryCoverage,
   getCandidateDocuments,
   setActiveResumeFamily,
   updateApplicationPackageStatus,
@@ -79,6 +81,14 @@ type ApplicationPackageStats = {
   statuses?: Record<string, number>
   verification?: Record<string, number>
   documents?: number
+}
+
+type DiscoveryCoverage = {
+  ai_job_hunter_only: number
+  chatgpt_work_only: number
+  found_by_both: number
+  duplicate_rate: number
+  qualified_roles_missed_by_automation: number
 }
 
 function apiErrorMessage(error: unknown, fallback: string) {
@@ -156,6 +166,11 @@ export default function ApplicationStudioPage() {
   const documentsQuery = useQuery<CandidateDocumentsResponse>({
     queryKey: ['candidate-documents'],
     queryFn: () => getCandidateDocuments(),
+    staleTime: 30_000,
+  })
+  const coverageQuery = useQuery<DiscoveryCoverage>({
+    queryKey: ['discovery-coverage'],
+    queryFn: getDiscoveryCoverage,
     staleTime: 30_000,
   })
 
@@ -250,7 +265,8 @@ export default function ApplicationStudioPage() {
             GetHiredASAP owns the job record, evidence, documents, contacts, and application state. ChatGPT Work can enrich eligible packages without becoming a hidden source of truth.
           </p>
         </div>
-        <div style={{ display: 'flex', padding: '4px', gap: '4px', borderRadius: '12px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
+        <div style={{ display: 'flex', padding: '4px', gap: '4px', borderRadius: '8px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', alignItems: 'center' }}>
+          <Link href="/application-studio/import" style={{ display: 'inline-flex', alignItems: 'center', gap: '7px', borderRadius: '6px', padding: '9px 12px', color: '#07110B', background: 'var(--accent)', textDecoration: 'none', fontWeight: 800, fontSize: '13px' }}><Plus size={14} /> Import lead</Link>
           {(['pipeline', 'vault'] as const).map(value => (
             <button key={value} onClick={() => setTab(value)} style={{
               border: 'none', borderRadius: '9px', padding: '9px 14px', cursor: 'pointer',
@@ -275,6 +291,24 @@ export default function ApplicationStudioPage() {
                 <div style={{ color: 'var(--muted2)', fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '1px' }}>{card.label}</div>
               </div>
             ))}
+          </div>
+
+          <div style={{ ...cardStyle(), borderRadius: '8px' }}>
+            <div style={{ color: 'var(--text)', fontWeight: 750, marginBottom: '12px' }}>Discovery coverage</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(145px, 1fr))', gap: '10px' }}>
+              {[
+                ['AI Job Hunter only', coverageQuery.data?.ai_job_hunter_only || 0],
+                ['Work only', coverageQuery.data?.chatgpt_work_only || 0],
+                ['Found by both', coverageQuery.data?.found_by_both || 0],
+                ['Duplicate rate', `${Math.round((coverageQuery.data?.duplicate_rate || 0) * 100)}%`],
+                ['Automation misses', coverageQuery.data?.qualified_roles_missed_by_automation || 0],
+              ].map(([label, value]) => (
+                <div key={String(label)} style={{ padding: '11px', borderRadius: '6px', background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.055)' }}>
+                  <div style={{ color: 'var(--text)', fontSize: '22px', fontWeight: 800 }}>{value}</div>
+                  <div style={{ color: 'var(--muted2)', fontSize: '10px', marginTop: '4px', fontFamily: 'JetBrains Mono, monospace', textTransform: 'uppercase' }}>{label}</div>
+                </div>
+              ))}
+            </div>
           </div>
 
           <div style={{ ...cardStyle(), display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '12px' }}>
