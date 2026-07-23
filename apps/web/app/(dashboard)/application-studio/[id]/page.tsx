@@ -2,13 +2,14 @@
 
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
-import { FormEvent, useState } from 'react'
+import { FormEvent, useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Check, Copy, ExternalLink, FileText, Mail, Plus, ShieldCheck, UserRound } from 'lucide-react'
 import {
   addApplicationPackageContact,
   addApplicationPackageOutreach,
   getApplicationPackage,
+  updateAutomationMissFeedback,
   updateApplicationPackageStatus,
 } from '@/lib/api'
 
@@ -75,6 +76,10 @@ type ApplicationPackageDetail = {
   contacts?: PackageContact[]
   outreach_drafts?: OutreachDraft[]
   documents?: PackageDocumentLink[]
+  discovered_by?: string
+  missed_by_automation?: boolean
+  automation_miss_reason?: string | null
+  automation_miss_notes?: string | null
 }
 
 function apiErrorMessage(error: unknown, fallback: string) {
@@ -89,6 +94,7 @@ export default function ApplicationPackagePage() {
   const [copied, setCopied] = useState('')
   const [contactForm, setContactForm] = useState({ name: '', title: '', profile_url: '', contact_type: 'RECRUITER' })
   const [draftForm, setDraftForm] = useState({ channel: 'LINKEDIN', subject: '', body: '' })
+  const [missForm, setMissForm] = useState({ missed_by_automation: false, reason: 'SOURCE_NOT_MONITORED', notes: '' })
 
   const packageQuery = useQuery<{ package: ApplicationPackageDetail }>({
     queryKey: ['application-package', id],
@@ -111,8 +117,34 @@ export default function ApplicationPackagePage() {
     mutationFn: (status: string) => updateApplicationPackageStatus(id, { status }),
     onSuccess: refresh,
   })
+  const missMutation = useMutation({
+    mutationFn: (payload: Record<string, unknown>) => updateAutomationMissFeedback(id, payload),
+    onSuccess: () => {
+      refresh()
+      qc.invalidateQueries({ queryKey: ['discovery-coverage'] })
+    },
+  })
 
   const applicationPackage = packageQuery.data?.package
+
+  useEffect(() => {
+    if (!applicationPackage) return
+    setMissForm({
+      missed_by_automation: Boolean(applicationPackage.missed_by_automation),
+      reason: applicationPackage.automation_miss_reason || 'SOURCE_NOT_MONITORED',
+      notes: applicationPackage.automation_miss_notes || '',
+    })
+  }, [applicationPackage])
+
+  async function submitMissFeedback(event: FormEvent) {
+    event.preventDefault()
+    setError('')
+    try {
+      await missMutation.mutateAsync(missForm)
+    } catch (mutationError: unknown) {
+      setError(apiErrorMessage(mutationError, 'Unable to save automation feedback'))
+    }
+  }
 
   async function submitContact(event: FormEvent) {
     event.preventDefault()
@@ -189,6 +221,31 @@ export default function ApplicationPackagePage() {
         <div style={{ display: 'flex', gap: '9px', alignItems: 'center', marginBottom: '13px' }}><ShieldCheck size={18} color="var(--accent)" /><div style={{ color: 'var(--text)', fontWeight: 750 }}>Verification evidence</div></div>
         <pre style={{ margin: 0, whiteSpace: 'pre-wrap', color: 'var(--muted2)', fontFamily: 'JetBrains Mono, monospace', fontSize: '11px', lineHeight: 1.6 }}>{JSON.stringify(applicationPackage.verification_evidence || { status: 'Evidence has not been added yet.' }, null, 2)}</pre>
       </div>
+
+      <section style={cardStyle()}>
+        <div style={{ color: 'var(--text)', fontWeight: 750 }}>Did automation miss this job?</div>
+        <p style={{ color: 'var(--muted2)', fontSize: '12px', lineHeight: 1.55, margin: '6px 0 14px' }}>Label Work-only discoveries so source coverage can improve without changing matching scores.</p>
+        <form onSubmit={submitMissFeedback} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '10px', alignItems: 'end' }}>
+          <label style={{ color: 'var(--text2)', fontSize: '12px', display: 'grid', gap: '7px' }}>
+            Classification
+            <select value={missForm.missed_by_automation ? 'missed' : 'not_missed'} onChange={event => setMissForm({ ...missForm, missed_by_automation: event.target.value === 'missed' })} style={inputStyle}>
+              <option value="not_missed">Automation did not miss it</option><option value="missed">Qualified role missed by automation</option>
+            </select>
+          </label>
+          <label style={{ color: 'var(--text2)', fontSize: '12px', display: 'grid', gap: '7px' }}>
+            Reason
+            <select disabled={!missForm.missed_by_automation} value={missForm.reason} onChange={event => setMissForm({ ...missForm, reason: event.target.value })} style={inputStyle}>
+              <option value="SOURCE_NOT_MONITORED">Source not monitored</option><option value="SOURCE_FAILED">Source failed</option><option value="POLLING_DELAY">Polling delay</option><option value="DEDUPLICATION_ERROR">Deduplication error</option><option value="VALIDATION_REJECTED">Validation rejected it</option><option value="ELIGIBILITY_FILTERED">Eligibility filter removed it</option><option value="INDEXING_DELAY">Indexing delay</option><option value="UNKNOWN">Unknown</option>
+            </select>
+          </label>
+          <label style={{ color: 'var(--text2)', fontSize: '12px', display: 'grid', gap: '7px' }}>
+            Notes
+            <input maxLength={2000} placeholder="What should the discovery engine learn?" value={missForm.notes} onChange={event => setMissForm({ ...missForm, notes: event.target.value })} style={inputStyle} />
+          </label>
+          <button disabled={missMutation.isPending} style={{ borderRadius: '10px', padding: '10px 12px', border: '1px solid rgba(245,158,11,0.25)', background: 'rgba(245,158,11,0.08)', color: '#FBBF24', cursor: 'pointer', fontWeight: 700 }}>Save feedback</button>
+        </form>
+        {applicationPackage.missed_by_automation && <div style={{ marginTop: '10px', color: '#FBBF24', fontSize: '12px' }}>Current label: {humanize(applicationPackage.automation_miss_reason)}{applicationPackage.automation_miss_notes ? ` · ${applicationPackage.automation_miss_notes}` : ''}</div>}
+      </section>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(330px,1fr))', gap: '16px' }}>
         <section style={cardStyle()}>
