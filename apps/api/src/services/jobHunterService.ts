@@ -524,10 +524,9 @@ function normalize(value?: string | null) {
 
 function includesKeyword(text: string, keyword: string) {
   const normalizedKeyword = normalize(keyword)
-  if (normalizedKeyword.length <= 3) {
-    return new RegExp(`\\b${normalizedKeyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`).test(text)
-  }
-  return text.includes(normalizedKeyword)
+  if (!normalizedKeyword) return false
+  const escaped = normalizedKeyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return new RegExp(`(?:^|[^a-z0-9])${escaped}(?=$|[^a-z0-9])`).test(normalize(text))
 }
 
 function unique<T>(items: T[]) {
@@ -862,7 +861,7 @@ const CLEARLY_NON_CANADA_LOCATIONS = [
   'west virginia', 'wisconsin', 'wyoming',
 ]
 
-function jobPassesProfileEligibility(job: JobHunterJob, profile: UserProfileForMatching) {
+export function jobPassesProfileEligibility(job: JobHunterJob, profile: UserProfileForMatching) {
   const title = normalize(job.title)
   const category = normalize(job.category)
   const location = normalize(job.location)
